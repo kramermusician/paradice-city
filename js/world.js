@@ -618,7 +618,7 @@ export class World {
   update(cam) {
     for (const t of this.tiles.values()) {
       const d = Math.hypot(t.cx - cam.x, t.cz - cam.z);
-      t.group.visible = d < 4300;
+      t.group.visible = d < (this.viewDist || 4300);
       const near = d < 900;
       for (const m of t.casters) m.castShadow = near;
       for (const m of t.detail) m.visible = d < 1600;

@@ -183,7 +183,8 @@ export class Missions {
     for (const d of this.defs) {
       if (!d.marker.visible || !this.near(v, d.pos, 10)) continue;
       if (Math.abs((d.pos.y || 0) - v.y) > 4) continue;
-      const ok = d.need === 'boat' ? v.kind === 'boat' : d.need === 'car' ? v.kind === 'car' : v.kind !== 'boat';
+      const ok = d.need === 'boat' ? v.kind === 'boat' : d.need === 'car' ? v.kind === 'car' : v.kind === 'car' || v.kind === 'truck';
+      if (!ok && v.kind === 'air') { if (v.y < 12) this.G.hud.hint(d.name + ' needs ' + (d.need === 'boat' ? 'the boat' : 'one of Dad\'s cars') + '. V changes vehicle.'); continue; }
       if (!ok) { this.G.hud.hint(d.need === 'boat' ? 'Check the Traps needs the boat. Swap at the dock (E).' : d.name + ' needs one of Dad\'s cars.'); continue; }
       if (this.cooldown > 0) continue;
       this.begin(d.id);
@@ -268,7 +269,7 @@ export class Missions {
     if (!d) return;
     if (d.need === 'boat') G.goBoat(d.pos.x - 20, d.pos.z, 0);
     else {
-      if (G.active.kind === 'boat' || G.active.kind === 'truck') G.backToCar();
+      if (G.active.kind === 'boat' || G.active.kind === 'truck' || G.active.kind === 'air') G.backToCar();
       const r = G.world.nearestRoadPoint(d.pos.x, d.pos.z, { ground: true });
       const back = 18;
       // face the way the mission goes
@@ -479,8 +480,8 @@ export class Missions {
     setSiren(false); setRotor(0);
   }
   // compile the hidden chase models' shaders up front so they appear without a stall
-  prewarm(renderer, camera) {
-    const hidden = [this.police, ...this.heliPool];
+  prewarm(renderer, camera, extra = []) {
+    const hidden = [this.police, ...this.heliPool, ...extra];
     hidden.forEach((o) => { o.visible = true; });
     try { renderer.compile(this.G.scene, camera); } catch (e) { /* best effort */ }
     hidden.forEach((o) => { o.visible = false; });
@@ -522,7 +523,7 @@ export class Missions {
         if (c.u >= 1) { c.state = 'idle'; c.t = 5 + Math.random() * 8; [c.from, c.to] = [c.to, c.from]; }
       }
       // collisions with the player's vehicle (and the trailer)
-      if (v.kind === 'boat') continue;
+      if (v.kind === 'boat' || (v.kind === 'air' && v.y > 2.5)) continue;
       let hit = d < (v.kind === 'truck' ? 3.2 : 2.6);
       if (!hit && v.kind === 'truck') for (const [x, z] of v.trailerCorners()) if (Math.hypot(x - m.position.x, z - m.position.z) < 2.0) hit = true;
       if (hit && Math.abs(v.speed) > 1.2) {

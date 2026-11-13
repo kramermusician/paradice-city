@@ -2,7 +2,7 @@
 const keys = new Set();
 const pressed = new Set();
 addEventListener('keydown', (e) => {
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
   if (!keys.has(e.code)) pressed.add(e.code);
   keys.add(e.code);
 });
@@ -11,7 +11,7 @@ addEventListener('blur', () => keys.clear());
 
 const padPrev = {};
 export const input = {
-  throttle: 0, brake: 0, steer: 0, handbrake: false,
+  throttle: 0, brake: 0, steer: 0, handbrake: false, lift: 0, vehicles: false, map: false,
   interact: false, radioNext: false, radioPrev: false, interactHeld: false, camera: false, pause: false, confirm: false, up: false, down: false, any: false,
   usingPad: false,
   update() {
@@ -21,6 +21,9 @@ export const input = {
     let br = k('KeyS', 'ArrowDown') ? 1 : 0;
     let st = (k('KeyA', 'ArrowLeft') ? 1 : 0) - (k('KeyD', 'ArrowRight') ? 1 : 0);
     let hb = k('Space');
+    // flying: Space climbs, Shift descends
+    let lift = (k('Space') ? 1 : 0) - (k('ShiftLeft', 'ShiftRight') ? 1 : 0);
+    let veh = p('KeyV'), map = p('KeyM');
     let inter = p('KeyE'), held = k('KeyE'), cam = p('KeyC'), pause = p('Escape', 'KeyP');
     let rn = p('KeyR'), rp = p('KeyQ');
     let conf = p('Enter', 'NumpadEnter'), up = p('ArrowUp', 'KeyW'), down = p('ArrowDown', 'KeyS');
@@ -37,6 +40,9 @@ export const input = {
       th = Math.max(th, bv(7));
       br = Math.max(br, bv(6));
       hb = hb || b(0);
+      const ry = Math.abs(g.axes[3] || 0) > 0.2 ? -g.axes[3] : 0;
+      lift = lift || (b(0) ? 1 : 0) - (b(1) ? 1 : 0) || ry;
+      veh = veh || edge(8);
       rn = rn || edge(5); rp = rp || edge(4);
       inter = inter || edge(2); held = held || b(2);
       cam = cam || edge(3);
@@ -44,9 +50,9 @@ export const input = {
       conf = conf || edge(0);
       const up_ = edge(12), dn = edge(13);
       up = up || up_; down = down || dn;
-      any = any || inter || cam || pause || conf;
+      any = any || inter || cam || pause || conf || veh;
     }
-    Object.assign(this, { throttle: th, brake: br, steer: Math.max(-1, Math.min(1, st)), handbrake: hb, radioNext: rn, radioPrev: rp, interact: inter, interactHeld: held, camera: cam, pause, confirm: conf, up, down, any });
+    Object.assign(this, { lift: Math.max(-1, Math.min(1, lift)), vehicles: veh, map, throttle: th, brake: br, steer: Math.max(-1, Math.min(1, st)), handbrake: hb, radioNext: rn, radioPrev: rp, interact: inter, interactHeld: held, camera: cam, pause, confirm: conf, up, down, any });
     pressed.clear();
   },
 };

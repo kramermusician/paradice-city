@@ -30,6 +30,12 @@ export const VEHICLES = [
     file: 'assets/cars/boat.glb', top: 41, accel: 4.6, grip: 1.4, credit: 'boat' },
   { id: 'semi', kind: 'truck', name: 'Cranberry reefer rig', year: '18 wheels', note: 'tractor and open-top reefer trailer',
     file: null, top: 66, accel: 2.8, grip: 7, credit: 'procedural' },
+  { id: 'jetpack', kind: 'air', fly: 'jetpack', name: 'Jetpack', year: 'twin thrusters', note: 'Space up, Shift down',
+    file: null, top: 55, accel: 12, grip: 3, credit: 'procedural' },
+  { id: 'heli', kind: 'air', fly: 'heli', name: 'Helicopter', year: 'four seats', note: 'white and orange. Space up, Shift down',
+    file: null, top: 120, accel: 9, grip: 3, credit: 'procedural' },
+  { id: 'jet', kind: 'air', fly: 'jet', name: 'Fighter jet', year: 'unarmed show jet', note: 'Space pulls up, Shift dives',
+    file: null, top: 420, accel: 0, grip: 1, credit: 'procedural' },
   // { id: 'corvette-c8', kind: 'car', name: 'Chevrolet Corvette', year: '2020s', note: 'C8',
   //   file: 'assets/cars/corvette-c8.glb', top: 120, accel: 10, grip: 11, credit: 'corvette' },
 ];

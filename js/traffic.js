@@ -33,7 +33,7 @@ export class Traffic {
       const r = this.ways[wi], n = r.p.length / 3;
       const s = Math.floor(Math.random() * (n - 1));
       const d = Math.hypot(r.p[s * 3] - px, r.p[s * 3 + 1] - pz);
-      if (d < 150 || d > 1300) continue;
+      if (d < (this.near || 150) || d > (this.far || 1300)) continue;
       Object.assign(c, { way: wi, seg: s, dir: Math.random() < 0.5 ? 1 : -1, u: 0, speed: 0 });
       c.m.visible = true;
       return;
@@ -43,10 +43,11 @@ export class Traffic {
   update(dt, player) {
     const px = player.pos.x, pz = player.pos.z;
     for (const c of this.cars) {
+      if (c.chase) continue; // a police car in a chase is driven by police.js
       if (!this.enabled) { c.m.visible = false; continue; }
-      if (c.way < 0 || Math.hypot(c.m.position.x - px, c.m.position.z - pz) > 1500) { this.respawn(c, px, pz); if (c.way < 0) continue; }
+      if (c.way < 0 || Math.hypot(c.m.position.x - px, c.m.position.z - pz) > (this.far || 1300) + 200) { this.respawn(c, px, pz); if (c.way < 0) continue; }
       const r = this.ways[c.way], p = r.p, n = p.length / 3;
-      const limit = (r.limit || 35) / 2.237;
+      const limit = (r.limit || 35) / 2.237 * (c.mul || 1);
       // slow down if the player is ahead and close
       const fx = Math.cos(c.m.rotation.y), fz = -Math.sin(c.m.rotation.y);
       const dx = px - c.m.position.x, dz = pz - c.m.position.z;
@@ -97,6 +98,7 @@ export class Traffic {
         if (into < 0) { player.vel.x -= nx * into * 1.4; player.vel.y -= nz * into * 1.4; hit = Math.max(hit, -into); }
         player.pos.x += nx * (r - d) * 0.6; player.pos.z += nz * (r - d) * 0.6;
         c.speed = 0;
+        if (c.cop && hit > 3) this.copHit = c;
       }
     }
     return hit;

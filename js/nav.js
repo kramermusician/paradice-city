@@ -120,7 +120,7 @@ export class Nav {
 
   update(dt, v, target) {
     this.t += dt;
-    const show = this.enabled && this.ok && target && v.kind !== 'boat';
+    const show = this.enabled && this.ok && target && v.kind !== 'boat' && v.kind !== 'air';
     if (!show) { this.mesh.visible = false; return; }
     const key = Math.round(target.x) + ',' + Math.round(target.z) + ',' + Math.round(target.y || 0);
     if (key !== this.targetKey) { this.targetKey = key; this.solve(target); }

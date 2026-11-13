@@ -24,6 +24,9 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 | Handbrake drift (tires screech) | Space | A or right bumper |
 | Camera: chase, driver's seat, overhead | C | Y |
 | Swap car and boat at the dock, pull a trap (hold) | E | X |
+| Change vehicle (the picker; V or Esc goes back) | V | Back / Select |
+| Big map (zoom, drag, click to drop a target) | M, or click the minimap | |
+| Fly: climb, descend (jet: pull up, dive) | Space, Shift | A, B or right stick |
 | Pause menu (missions, change vehicle, settings, credits) | Esc or P | Start |
 | Pick a vehicle on the select screen | Up, Down, Enter (or click) | D-pad, A |
 
@@ -35,11 +38,32 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 - HUD: mph, the posted speed limit (from OpenStreetMap where tagged), area name, heading-up minimap with mission markers.
 - Light ambient traffic on the main roads (toggle in the pause menu). Golf carts with drivers cross near the Harbourside course and Bay Isles. 18 boats (center consoles, sailboats, pontoons, cruisers, skiffs) cruise the bay and gulf near you, steer around land, give your boat room and bump off it.
 
+## Flying (added 2026-11-13)
+
+Three flyers are on the picker, all built in code: a jetpack, a white and orange helicopter, and an unarmed fighter jet. Press V any time to switch; a flyer takes off from wherever you are, and a car picked from the sky lands on the nearest road below.
+
+- Jetpack and helicopter hover: W forward, S back, A/D turn, Space climbs, Shift comes down. They land on roads, ground and rooftops and stop at building walls. The helicopter's rotor is heard; the jetpack's flames grow with thrust.
+- Fighter jet: starts at about 500 ft. W is full throttle (afterburner), S slows, A/D bank and turn, Space pulls up, Shift dives. Too slow and the nose drops. A gentle touchdown on land rolls; hitting the ground or a building hard bounces it back up with "Pull up!". No weapons.
+- The HUD shows altitude in feet instead of the speed limit, the minimap zooms out, and the view distance and fog open up as you climb. Missions still need a car or the boat.
+
+## Big map and targets
+
+Click the minimap (or press M). Scroll to zoom, drag to move, click to drop a pink X. In a car a pink route line shows on the map and the road arrows lead there (when road arrows are on); in the boat or a flyer the top-right tag points the way with the distance. Arriving clears it; right-click or "Clear target" removes it. A mission's checkpoint takes over the arrows while the mission runs.
+
+## Police (free roam)
+
+Six patrol cruisers drive in traffic, a few now and then answer a call with lights on, and up to seven speed traps sit on the shoulder of Gulf of Mexico Drive and the Ringling Causeway. Go 15 mph or more over the limit within about 110 m of one, or bump one, and a chase starts (`js/police.js`). One star: a cruiser on your tail. 18 seconds: two stars, another cruiser. 40 seconds: three stars, a helicopter with a searchlight. Stop with a cruiser behind you and you get a warning; get more than about 320 m ahead for 5 seconds (10 with the helicopter) and you lose them. Cruisers top out near 105 mph, so the fast cars can get away. Nobody rams, shoots or gets hurt. Off during missions (the Cranberry Run keeps its own police) and switchable in the pause menu (Police patrols).
+
+## Cyclists
+
+Up to 40 riders in groups of one to four (pace lines), weighted toward Gulf of Mexico Drive, on the right-hand edge of the island streets (`js/bikes.js`). They pedal, slow behind you, and if you clip one they tip over, sit a moment and get back on. They follow the Traffic toggle.
+
 ## Settings (pause menu, saved in the browser)
 
 - Road arrows on or off. During a car or truck mission, soft chevrons on the pavement lead to the next checkpoint along the real roads (`js/nav.js`: one shortest-path sweep per checkpoint, so a wrong turn re-routes at once). If the route is behind you a "Turn around" note appears. No arrows in free roam or on the boat.
 - Camera: Chase, Driver or Overhead (same as the C key). The driver view hides the car body and shows a simple cockpit with a steering wheel that turns, because the scanned and decimated models have no clean cabin. Overhead looks straight down with your heading up the screen.
-- Traffic on or off (cars and boats).
+- Traffic on or off (cars, boats and cyclists).
+- Police patrols on or off.
 
 A gold "Dad's place" marker (D on the minimap) sits at the middle of Cutter Lane.
 
@@ -71,7 +95,7 @@ Also shown in game under Esc, Credits.
 - "2004 Audi TT Coupe 3.2 Quattro" by OUTPISTON (sketchfab.com/outpiston), CC BY-NC-SA 4.0. Repainted silver, decimated.
 - Kramer's 2024 Subaru Outback XT: his own phone scan (smoothed copy, decimated).
 - Dad's boat: built in Blender for this project, original.
-- Truck, trailer, crates, golf carts, police SUV, helicopters, store, warehouse, signs, freezer set, traffic cars, traffic boats: built in code here, original.
+- Jetpack, player helicopter, fighter jet, cyclists, police cruisers, truck, trailer, crates, golf carts, police SUV, helicopters, store, warehouse, signs, freezer set, traffic cars, traffic boats: built in code here, original.
 - three.js r169, MIT.
 
 The two CC BY-NC-SA cars mean the public site must stay free and non-commercial, with credits shown (in-game credits screen and this README).
@@ -86,7 +110,7 @@ The two CC BY-NC-SA cars mean the public site must stay free and non-commercial,
 
 ## Files
 
-- `index.html`, `js/main.js` (loop, cameras, select screen, swaps, intro, menus), `js/world.js` (map build and spatial queries), `js/vehicles.js` (car, boat, truck physics), `js/missions.js`, `js/models.js` (procedural models), `js/hud.js`, `js/traffic.js`, `js/boats.js` (boat traffic), `js/water.js`, `js/sky.js`, `js/effects.js`, `js/input.js`, `js/audio.js`, `js/nav.js` (road arrows), `js/config.js`. `build/test/fixes.cjs` re-checks the 2026-11-13 fix pass (trailer, cameras, arrows, traps, select screen). `build/test/boats.cjs` counts boat traffic and times the frame stall when a helicopter or the police appear (the helicopter used to freeze the game about 2.8 s; lights are now in the scene from the start and chase models are pre-compiled).
+- `index.html`, `js/main.js` (loop, cameras, select screen, swaps, intro, menus), `js/world.js` (map build and spatial queries), `js/vehicles.js` (car, boat, truck physics), `js/missions.js`, `js/models.js` (procedural models), `js/hud.js`, `js/traffic.js`, `js/boats.js` (boat traffic), `js/water.js`, `js/sky.js`, `js/effects.js`, `js/input.js`, `js/audio.js`, `js/nav.js` (road arrows), `js/config.js`, `js/police.js` (patrols, speed traps, chases), `js/bikes.js` (cyclists), `js/bigmap.js` (big map and targets). `build/test/fly.cjs` and `fly2.cjs` check the flyers, the V picker, the big map target, a police chase and the cyclists. `build/test/fixes.cjs` re-checks the 2026-11-13 fix pass (trailer, cameras, arrows, traps, select screen). `build/test/boats.cjs` counts boat traffic and times the frame stall when a helicopter or the police appear (the helicopter used to freeze the game about 2.8 s; lights are now in the scene from the start and chase models are pre-compiled).
 - `build/fetch_osm.py`, `build/bake_world.py`, `build/retry_buildings.sh`, `build/decimate_cars.py`.
 - `build/test/`: headless Chrome checks (needs a puppeteer install; the scripts default to the one in `../esl-3d-viz/node_modules`). `shots.sh` regenerates the screenshots, `play.cjs` drives every mission end to end, `eval.cjs` prints expressions from a loaded game.
 - `screenshots/`: select screen, Longboat Key, Ringling Bridge at sunset, boat at the buoys, freezer intro, birthday sign, truck at the dock, golf cart.

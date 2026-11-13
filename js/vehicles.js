@@ -1,7 +1,7 @@
 // Vehicles: arcade car physics, boat physics, and the articulated cranberry truck.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { makePinwheel, makeTractor, makeTrailer, makeCrate } from './models.js';
+import { makePinwheel, makeTractor, makeTrailer, makeCrate, makeJetpackPilot, makeFighterJet, makeHelicopter } from './models.js';
 
 const loader = new GLTFLoader();
 const cache = new Map();
@@ -443,8 +443,155 @@ export class Truck extends Car {
   clearFlying() { for (const f of this.flying) f.m.removeFromParent(); this.flying = []; }
 }
 
+// ------------------------------------------------------------------------- flying: jetpack, helicopter, fighter jet
+// kind 'air', def.fly says which. Arcade flight: Space climbs, Shift descends (jet: Space pulls up,
+// Shift dives), W/S throttle, A/D turn. You can land on roads, ground and rooftops; the jet bounces
+// back up off anything it hits ("Pull up!") instead of crashing. Unarmed, like everything else.
+const MAX_ALT = 600;
+export class Flyer extends Vehicle {
+  async init() {
+    const f = this.fly = this.def.fly;
+    let model;
+    if (f === 'jet') model = makeFighterJet();
+    else if (f === 'heli') { model = makeHelicopter({ color: 0xf4f4f4, stripe: 0xff7a45, spot: false }); model.position.y = 1.68; model.scale.setScalar(0.85); model.position.y = 1.43; }
+    else model = makeJetpackPilot();
+    this.body.add(model);
+    this.model = model;
+    this.ud = model.userData;
+    const bb = new THREE.Box3().setFromObject(model);
+    this.len = bb.max.x - bb.min.x; this.wid = bb.max.z - bb.min.z; this.hgt = bb.max.y;
+    this.pin = makePinwheel();
+    if (f === 'jet') { this.pin.position.copy(this.ud.tailTop); this.pin.scale.setScalar(2.2); }
+    else if (f === 'heli') { this.pin.position.set(-5.9, 2.5, 0.2); this.pin.scale.setScalar(1.5); }
+    else { this.pin.position.copy(this.ud.packTop); this.pin.scale.setScalar(0.8); }
+    this.body.add(this.pin);
+    // the driver view hides the body: first-person flying
+    this.cockpit = new THREE.Group(); this.cockpit.visible = false; this.body.add(this.cockpit);
+    this.seat = f === 'jet' ? new THREE.Vector3(4.6, 2.9, 0) : f === 'heli' ? new THREE.Vector3(1.4, 1.9, -0.35) : new THREE.Vector3(0.25, 1.7, 0);
+    this.hood = this.seat;
+    this.vy = 0; this.gamma = 0; this.bank = 0; this.thrust = 0; this.grounded = true; this.pullUpT = 0;
+    this.radius = f === 'jet' ? 5 : f === 'heli' ? 4 : 0.6;
+    return this;
+  }
+  place(x, z, heading, y = 0) {
+    super.place(x, z, heading, y);
+    this.vy = 0; this.gamma = 0; this.bank = 0; this.thrust = 0;
+  }
+  // takeoff: start in the air (jet at cruise, the others a few meters up)
+  launch(x, z, heading, world) {
+    const g = this.groundAt(world, x, z, 999);
+    if (this.fly === 'jet') { this.place(x, z, heading, Math.max(g, 0) + 160); this.speed = 75; this.thrust = 0.6; this.vel.set(Math.cos(heading) * 75, -Math.sin(heading) * 75); this.grounded = false; }
+    else { this.place(x, z, heading, g + 3); this.grounded = false; }
+  }
+  groundAt(world, x, z, yRef = this.y) {
+    const r = world.roadAt(x, z, yRef);
+    let g = r ? r.y : world.isLand(x, z) ? 0 : WATER_Y + 0.25;
+    const b = world.buildingAt(x, z);
+    if (b) g = Math.max(g, b.h);
+    return g;
+  }
+  update(dt, inp, world, fx_) {
+    this.t += dt;
+    const f = this.fly, lift = inp.lift || 0;
+    let nx, nz;
+    if (f === 'jet') {
+      const top = this.top, stall = 38;
+      this.thrust += ((inp.throttle ? 1 : inp.brake ? 0 : 0.55) - this.thrust) * Math.min(1, dt * 1.2);
+      let sp = this.speed;
+      let want = inp.brake ? Math.max(this.grounded ? 0 : stall * 0.9, sp - 30 * dt) : top * this.thrust;
+      if (this.grounded && !inp.throttle) want = 0; // rolling on the ground: no throttle, it slows to a stop
+      sp += (want - sp) * Math.min(1, dt * (inp.brake ? 1.2 : this.grounded && !inp.throttle ? 0.3 : 0.45));
+      // bank into the turn; turn rate grows with bank
+      this.bank += (inp.steer * 1.1 * (this.grounded ? 0 : 1) - this.bank) * Math.min(1, dt * 3);
+      const yaw = this.grounded ? inp.steer * 0.5 * Math.min(1, sp / 8) : inp.steer * 0.75 + this.bank * 0.25;
+      this.heading += yaw * dt;
+      // climb angle
+      let gWant = lift * 0.55;
+      if (!this.grounded && sp < stall) gWant = Math.min(gWant, -0.25 * (1 - sp / stall)); // too slow: the nose drops
+      if (this.grounded) gWant = (lift > 0 && sp > 42) ? 0.25 : 0;
+      this.gamma += (gWant - this.gamma) * Math.min(1, dt * 2.2);
+      this.speed = sp;
+      const h = Math.cos(this.gamma) * sp;
+      this.vel.set(Math.cos(this.heading) * h, -Math.sin(this.heading) * h);
+      this.vy = Math.sin(this.gamma) * sp;
+      nx = this.pos.x + this.vel.x * dt; nz = this.pos.z + this.vel.y * dt;
+      let ny = Math.min(MAX_ALT, this.y + this.vy * dt);
+      const g = this.groundAt(world, nx, nz, ny + 3);
+      if (ny <= g + 0.05) {
+        // a gentle touchdown on a road or flat ground rolls; anything else bounces back up
+        const soft = this.vy > -6 && Math.abs(this.bank) < 0.35 && (g - this.y) < 1.5 && world.isLand(nx, nz);
+        if (soft) { ny = g; this.grounded = true; this.gamma = Math.max(0, this.gamma); this.vy = 0; }
+        else { this.pullUp(g); return this.finish(dt, fx_); }
+      } else if (ny > g + 0.6) this.grounded = false;
+      this.pos.x = nx; this.pos.z = nz; this.y = ny;
+      if (!world.inBounds(nx, nz, 200)) { this.heading += Math.PI * dt * 0.8; }
+      this.pitch = this.gamma; this.roll = -this.bank * 0.9;
+      const ab = Math.max(0, this.thrust - 0.75) * 4;
+      if (this.ud.flame) { this.ud.flame.scale.set(0.4 + this.thrust + ab, 1, 1); this.ud.flame.material.opacity = 0.3 + 0.6 * this.thrust; this.ud.core.scale.set(0.5 + this.thrust, 1, 1); }
+      if (this.ud.gear) this.ud.gear.visible = this.y - g < 30;
+      return this.finish(dt, fx_);
+    }
+    // hovering: jetpack and helicopter
+    const heli = f === 'heli';
+    const top = this.top, acc = heli ? 9 : 12, turn = heli ? 1.25 : 2.4;
+    const [fx, fz] = this.fwd();
+    let vf = this.vel.x * fx + this.vel.y * fz;
+    const [sx, sz] = this.side();
+    let vl = this.vel.x * sx + this.vel.y * sz;
+    this.steer += (inp.steer - this.steer) * Math.min(1, dt * 5);
+    this.heading += this.steer * turn * dt / (1 + Math.abs(vf) / 60);
+    if (inp.throttle) vf += acc * inp.throttle * Math.max(0, 1 - (vf / top) ** 2) * dt;
+    else if (inp.brake) vf -= acc * inp.brake * dt * (vf > 0 ? 1.4 : 0.6);
+    else vf -= Math.sign(vf) * Math.min(Math.abs(vf), (1.2 + Math.abs(vf) * 0.15) * dt);
+    vf = Math.max(vf, -top * 0.3);
+    vl *= Math.exp(-3 * dt);
+    const [hx, hz] = this.fwd();
+    this.vel.set(hx * vf + sx * vl, hz * vf + sz * vl);
+    this.speed = vf;
+    this.vy += ((lift * (heli ? 11 : 9)) - this.vy) * Math.min(1, dt * 2.5);
+    nx = this.pos.x + this.vel.x * dt; nz = this.pos.z + this.vel.y * dt;
+    let ny = Math.min(MAX_ALT, this.y + this.vy * dt);
+    const gHere = this.groundAt(world, this.pos.x, this.pos.z, this.y + 1);
+    const gNext = this.groundAt(world, nx, nz, ny + 1);
+    if (gNext > ny + 0.8 && gNext > gHere + 1) {
+      // a wall (building side): stop and slide off
+      const impact = Math.abs(vf);
+      this.vel.multiplyScalar(-0.2); this.speed *= -0.2;
+      nx = this.pos.x; nz = this.pos.z;
+      if (impact > 4) this.emit('crash', { impact });
+    }
+    const g = this.groundAt(world, nx, nz, ny + 1);
+    if (ny <= g) { ny = g; this.vy = Math.max(0, this.vy); }
+    if (!world.inBounds(nx, nz, 200)) { nx = this.pos.x; nz = this.pos.z; this.vel.set(0, 0); }
+    this.grounded = ny <= g + 0.05;
+    this.pos.x = nx; this.pos.z = nz; this.y = ny;
+    const lean = heli ? 0.0045 : 0.012;
+    this.pitch += (-vf * lean - this.pitch) * Math.min(1, dt * 3);
+    this.roll += (-this.steer * Math.min(1, Math.abs(vf) / 15) * (heli ? 0.22 : 0.35) - this.roll) * Math.min(1, dt * 3);
+    if (heli) { this.ud.rotor.rotation.y += dt * (this.grounded && !lift ? 14 : 32); this.ud.tail.rotation.z += dt * 40; }
+    else for (const fl of this.ud.flames) { const k = this.grounded && !lift && !inp.throttle ? 0.25 : 0.7 + Math.max(0, lift) * 0.6 + (inp.throttle || 0) * 0.3; fl.scale.set(1, k * (0.85 + Math.random() * 0.3), 1); }
+    return this.finish(dt, fx_);
+  }
+  pullUp(g) {
+    this.y = g + 25; this.gamma = 0.35; this.vy = 0; this.grounded = false;
+    this.speed = Math.max(this.speed, 60);
+    this.emit('crash', { impact: 8 });
+    this.emit('pullup');
+  }
+  finish(dt, fx_) {
+    this.pos.y = this.y;
+    this.spinPinwheel(dt);
+    this.sync();
+    // thruster or jet wash over water
+    if (fx_ && this.y < 12 && !this.grounded && this.t % 0.06 < dt) {
+      fx_.spray.emit(this.pos.x + (Math.random() - 0.5) * 2, Math.max(WATER_Y + 0.2, this.y - 2), this.pos.z + (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 3, 0.5, (Math.random() - 0.5) * 3, { life: 0.8, s0: 0.4, s1: 1.4, grav: 2, alpha: 0.35 });
+    }
+  }
+}
+
 export async function createVehicle(def) {
-  const V = def.kind === 'boat' ? Boat : def.kind === 'truck' ? Truck : Car;
+  const V = def.kind === 'boat' ? Boat : def.kind === 'truck' ? Truck : def.kind === 'air' ? Flyer : Car;
   const v = new V(def);
   await v.init();
   return v;

@@ -271,9 +271,9 @@ export function makePoliceSUV() {
 }
 
 // ---------------------------------------------------------------- helicopter with a searchlight
-export function makeHelicopter() {
+export function makeHelicopter(opt = {}) {
   const g = new THREE.Group();
-  const body = M(0x23324f, { metalness: 0.4, roughness: 0.4 });
+  const body = M(opt.color ?? 0x23324f, { metalness: 0.4, roughness: 0.4 });
   const white = M(0xeeeeee);
   const glass = M(0x2a3d4d, { metalness: 0.6, roughness: 0.1, transparent: true, opacity: 0.8 });
   const cab = new THREE.Mesh(new THREE.SphereGeometry(1.5, 12, 10), body); cab.scale.set(1.6, 1, 1); g.add(cab);
@@ -294,6 +294,11 @@ export function makeHelicopter() {
   const cone = new THREE.Mesh(coneGeo, new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: 0.09, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   cone.position.set(1.0, -1.2, 0);
   g.add(cone);
+  if (opt.stripe != null) {
+    const band = new THREE.Mesh(new THREE.SphereGeometry(1.53, 16, 3, 0, Math.PI * 2, Math.PI * 0.52, Math.PI * 0.13), M(opt.stripe)); band.scale.set(1.6, 1, 1); g.add(band);
+    g.add(box(0.9, 0.5, 0.17, M(opt.stripe), -7.0, 1.4, 0));
+  }
+  if (opt.spot === false) { cone.removeFromParent(); g.userData = { rotor, tail, cone: null, spot: null }; return g; }
   const spot = new THREE.SpotLight(0xfff1c8, 6000, 160, 0.18, 0.5, 1.6);
   spot.position.set(1.0, -1.2, 0);
   g.add(spot); g.add(spot.target);
@@ -564,4 +569,118 @@ export function makeTrafficBoat(i = 0) {
   }
   g.userData = { kind, len, wid: kind === 'cruiser' ? 3.6 : kind === 'skiff' ? 1.9 : 2.7, speed: kind === 'sail' ? 4 : kind === 'pontoon' ? 6 : kind === 'skiff' ? 7 : kind === 'cruiser' ? 10 : 13 };
   return g;
+}
+
+// ---------------------------------------------------------------- flying vehicles (player)
+// Jetpack pilot: feet at y = 0, facing +X. Two thrusters on the back with flame cones.
+export function makeJetpackPilot() {
+  const g = new THREE.Group();
+  const suit = M(0xf0f0f2, { roughness: 0.5 }), dark = M(0x23252b), orange = M(0xff7a45, { roughness: 0.4 });
+  const visor = M(0x1a2a3a, { metalness: 0.8, roughness: 0.1 }), metal = M(0xc9ccd0, { metalness: 0.8, roughness: 0.3 });
+  for (const s of [-1, 1]) {
+    g.add(box(0.2, 0.85, 0.2, suit, 0, 0.45, s * 0.13));           // legs
+    g.add(box(0.3, 0.12, 0.2, dark, 0.05, 0.06, s * 0.13));         // boots
+    const arm = box(0.16, 0.65, 0.16, suit, 0.05, 1.2, s * 0.33); arm.rotation.x = s * 0.18; g.add(arm);
+  }
+  g.add(box(0.36, 0.62, 0.52, suit, 0, 1.2, 0));                    // torso
+  g.add(box(0.37, 0.1, 0.53, orange, 0, 1.0, 0));                   // belt
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), M(0xffffff, { roughness: 0.3 })); head.position.set(0.02, 1.68, 0); g.add(head);
+  const vz = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, -0.9, 1.8, 0.9, 1.0), visor); vz.position.set(0.05, 1.68, 0); g.add(vz);
+  // the pack
+  g.add(box(0.22, 0.55, 0.46, orange, -0.3, 1.22, 0));
+  const flames = [];
+  for (const s of [-1, 1]) {
+    g.add(cyl(0.11, 0.62, metal, -0.42, 1.12, s * 0.19, 'y', 12));
+    g.add(cyl(0.08, 0.1, dark, -0.42, 0.78, s * 0.19, 'y', 10));
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.9, 10, 1, true).rotateX(Math.PI).translate(0, -0.45, 0),
+      new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    fl.position.set(-0.42, 0.74, s * 0.19); g.add(fl); flames.push(fl);
+  }
+  g.userData.flames = flames;
+  g.userData.packTop = new THREE.Vector3(-0.3, 1.5, 0.12);
+  return g;
+}
+
+// Fighter jet, about 15 m long, unarmed (a show jet). Wheels touch y = 0, nose to +X.
+export function makeFighterJet() {
+  const g = new THREE.Group();
+  const grey = M(0x9aa3ad, { metalness: 0.55, roughness: 0.35 }), darkg = M(0x5d6670, { metalness: 0.5, roughness: 0.4 });
+  const glass = M(0x2a3a4a, { metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.85 });
+  const orange = M(0xff7a45, { roughness: 0.4 }), dark = M(0x1d1f24);
+  const Y = 1.9;
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 11, 16).rotateZ(Math.PI / 2), grey); fus.position.set(-0.5, Y, 0); fus.castShadow = true; g.add(fus);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 4.2, 16).rotateZ(-Math.PI / 2), grey); nose.position.set(7.1, Y, 0); nose.castShadow = true; g.add(nose);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.9, 10).rotateZ(-Math.PI / 2), dark); tip.position.set(9.4, Y, 0); g.add(tip);
+  const can = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 10), glass); can.scale.set(2.6, 0.9, 0.85); can.position.set(4.3, Y + 0.75, 0); g.add(can);
+  // delta wings and tail
+  const wing = new THREE.Shape(); wing.moveTo(2.5, 0); wing.lineTo(-4.2, 5.4); wing.lineTo(-5.6, 5.4); wing.lineTo(-5.2, 0); wing.closePath();
+  const wgeo = new THREE.ExtrudeGeometry(wing, { depth: 0.14, bevelEnabled: false });
+  for (const s of [-1, 1]) {
+    const w = new THREE.Mesh(wgeo, grey); w.rotation.x = s * Math.PI / 2; w.position.set(0, Y - 0.25 + (s > 0 ? 0.14 : 0), 0); w.castShadow = true; g.add(w);
+    const tipStripe = box(1.4, 0.16, 0.25, orange, -4.9, Y - 0.18, s * 5.3); g.add(tipStripe);
+    const st = new THREE.Shape(); st.moveTo(-4.0, 0); st.lineTo(-6.4, 2.6); st.lineTo(-7.3, 2.6); st.lineTo(-7.0, 0); st.closePath();
+    const sm = new THREE.Mesh(new THREE.ExtrudeGeometry(st, { depth: 0.1, bevelEnabled: false }), darkg); sm.rotation.x = s * Math.PI / 2; sm.position.set(0, Y, 0); g.add(sm);
+    const fin = new THREE.Shape(); fin.moveTo(-3.2, 0); fin.lineTo(-5.9, 3.0); fin.lineTo(-7.0, 3.0); fin.lineTo(-6.6, 0); fin.closePath();
+    const fm = new THREE.Mesh(new THREE.ExtrudeGeometry(fin, { depth: 0.12, bevelEnabled: false }), grey); fm.position.set(0, Y + 0.5, s * 0.75); fm.rotation.x = -s * 0.35; fm.castShadow = true; g.add(fm);
+    g.add(box(1.0, 0.25, 0.14, orange, -6.4, Y + 3.15, s * (0.75 + 1.0)));
+    g.add(box(2.8, 0.7, 0.5, darkg, 1.5, Y - 0.1, s * 1.0));      // intakes
+  }
+  const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.6, 1.0, 14, 1, true).rotateZ(Math.PI / 2), dark); noz.position.set(-6.5, Y, 0); g.add(noz);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.6, 4, 14, 1, true).rotateZ(Math.PI / 2).translate(-2, 0, 0),
+    new THREE.MeshBasicMaterial({ color: 0xff9a40, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  flame.position.set(-7.0, Y, 0); g.add(flame);
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 10, 1, true).rotateZ(Math.PI / 2).translate(-1.1, 0, 0),
+    new THREE.MeshBasicMaterial({ color: 0xaad4ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  core.position.set(-7.0, Y, 0); g.add(core);
+  // landing gear
+  const gear = new THREE.Group();
+  for (const [x, z] of [[5.6, 0], [-1.6, 1.4], [-1.6, -1.4]]) { gear.add(box(0.12, 1.3, 0.12, darkg, x, 0.95, z)); gear.add(cyl(0.32, 0.22, dark, x, 0.32, z, 'z', 12)); }
+  g.add(gear);
+  g.userData = { flame, core, gear, tailTop: new THREE.Vector3(-6.4, Y + 3.25, 1.75) };
+  return g;
+}
+
+// ---------------------------------------------------------------- cyclists
+// A rider on a road bike, facing +X, wheels on y = 0. Returns { body, legs } so the legs can pedal.
+const cycleMats = new Map();
+const cmat = (c) => { if (!cycleMats.has(c)) cycleMats.set(c, L(c)); return cycleMats.get(c); };
+export function makeCyclist(shirt = 0x3a7bd5, bike = 0x222222, skin = 0xc68e6b) {
+  const g = new THREE.Group();
+  const frame = M(bike, { metalness: 0.5, roughness: 0.35 }), tire = L(0x151515), sk = L(skin), sh = L(shirt), helmet = L(0xf2f2f2);
+  for (const x of [0.52, -0.52]) { const w = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.035, 6, 20), tire); w.position.set(x, 0.35, 0); g.add(w); }
+  const bar = (x1, y1, x2, y2, r = 0.025) => { const len = Math.hypot(x2 - x1, y2 - y1); const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), frame); m.position.set((x1 + x2) / 2, (y1 + y2) / 2, 0); m.rotation.z = Math.atan2(x1 - x2, y2 - y1); g.add(m); };
+  bar(-0.52, 0.35, -0.02, 0.38); bar(-0.02, 0.38, -0.12, 0.85); bar(-0.52, 0.35, -0.12, 0.85); bar(-0.12, 0.85, 0.42, 0.88); bar(-0.02, 0.38, 0.42, 0.88); bar(0.42, 0.88, 0.52, 0.35); bar(0.42, 0.88, 0.45, 1.0);
+  g.add(box(0.06, 0.04, 0.42, frame, 0.47, 1.0, 0));                // handlebar
+  g.add(box(0.24, 0.05, 0.1, L(0x111111), -0.14, 0.9, 0));         // saddle
+  const torso = box(0.6, 0.24, 0.34, sh, 0.12, 1.22, 0); torso.rotation.z = -0.55; g.add(torso);
+  for (const s of [-1, 1]) { const a = box(0.5, 0.08, 0.08, sk, 0.32, 1.12, s * 0.18); a.rotation.z = 0.75; g.add(a); }
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), sk); head.position.set(0.44, 1.45, 0); g.add(head);
+  const hel = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 6, 0, Math.PI * 2, 0, 1.5), helmet); hel.position.set(0.42, 1.48, 0); hel.scale.set(1.3, 0.9, 1); g.add(hel);
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(-0.1, 0.92, s * 0.1);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.1).translate(0, -0.31, 0), cmat(0x1d1d24));
+    hip.add(leg); legs.push(hip);
+  }
+  return { body: g, legs };
+}
+
+// Police cruiser built to share its light materials across the fleet: pass {red, blue} so a whole
+// fleet flashes in step and lights on or off is just a material swap (no new shaders mid-game).
+export function makePoliceCar() {
+  const g = new THREE.Group();
+  const white = M(0xf5f5f5, { metalness: 0.4, roughness: 0.35 }), navy = M(0x1b2a4a, { metalness: 0.4, roughness: 0.35 }), glass = M(0x111820, { metalness: 0.5, roughness: 0.1 });
+  g.add(box(4.8, 0.7, 1.9, navy, 0, 0.7, 0));
+  g.add(box(2.4, 0.6, 1.75, glass, -0.3, 1.33, 0));
+  g.add(box(2.2, 0.08, 1.77, white, -0.3, 1.66, 0));
+  g.add(box(2.6, 0.32, 1.92, white, 0, 0.82, 0));
+  for (const s of [-1, 1]) { g.add(box(0.06, 0.15, 0.35, E(0xfff3d0, 1.5), 2.4, 0.75, s * 0.6)); g.add(box(0.06, 0.15, 0.35, E(0xff2020, 1.5), -2.4, 0.75, s * 0.6)); }
+  for (const [x, z] of [[1.5, 0.88], [1.5, -0.88], [-1.5, 0.88], [-1.5, -0.88]]) g.add(wheel(x, 0.36, z, 0.36, 0.26));
+  const merged = mergeGroup(g);
+  merged.traverse((o) => { o.castShadow = false; });
+  const red = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.66), null), blue = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.66), null);
+  red.position.set(-0.3, 1.78, 0.38); blue.position.set(-0.3, 1.78, -0.38);
+  merged.add(red, blue);
+  merged.userData = { red, blue };
+  return merged;
 }

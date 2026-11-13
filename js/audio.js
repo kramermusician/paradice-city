@@ -16,9 +16,9 @@ export function initAudio() {
 }
 export function engine(speedFrac, throttle, kind, on = true) {
   if (!ctx) return;
-  const base = kind === 'boat' ? 55 : kind === 'truck' ? 38 : 48;
+  const base = kind === 'boat' ? 55 : kind === 'truck' ? 38 : kind === 'jet' ? 70 : kind === 'jetpack' ? 95 : kind === 'heli' ? 30 : 48;
   const gearFrac = kind === 'car' ? (speedFrac * 5) % 1 : speedFrac;
-  const f = base + gearFrac * (kind === 'truck' ? 50 : 110) + speedFrac * 40;
+  const f = base + gearFrac * (kind === 'truck' ? 50 : kind === 'jet' ? 260 : kind === 'heli' ? 20 : 110) + speedFrac * 40;
   const t = ctx.currentTime;
   eng.o1.frequency.setTargetAtTime(f, t, 0.05);
   eng.o2.frequency.setTargetAtTime(f * 0.5, t, 0.05);

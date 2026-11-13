@@ -47,7 +47,7 @@ export class HUD {
   }
   drawMinimap(v, markers) {
     const ctx = this.mctx, S = this.mini.width, { x0, z0, cell } = this.world.wm;
-    const zoom = v.kind === 'boat' ? 0.55 : Math.abs(v.speed) > 25 ? 0.7 : 1.0; // px per map px
+    const zoom = v.fly === 'jet' ? 0.25 : v.kind === 'air' ? 0.45 : v.kind === 'boat' ? 0.55 : Math.abs(v.speed) > 25 ? 0.7 : 1.0; // px per map px
     ctx.save();
     ctx.fillStyle = '#1d5470'; ctx.fillRect(0, 0, S, S);
     ctx.translate(S / 2, S / 2);
@@ -80,6 +80,7 @@ export class HUD {
     $('speed').textContent = Math.round(Math.abs(v.speed) * MPH);
     const lim = $('limit');
     if (limit && v.kind !== 'boat') { lim.style.display = 'block'; $('limitNum').textContent = limit; } else lim.style.display = 'none';
+    if (v.kind === 'air') { $('alt').style.display = 'block'; $('altNum').textContent = Math.max(0, Math.round(v.y * 3.281 / 10) * 10); } else $('alt').style.display = 'none';
     if (area !== this.areaLast) {
       this.areaLast = area;
       const a = $('area'); a.textContent = area; a.classList.remove('flash'); void a.offsetWidth; a.classList.add('flash');

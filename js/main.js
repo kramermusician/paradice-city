@@ -12,17 +12,20 @@ import { BoatTraffic } from './boats.js';
 import { Particles } from './effects.js';
 import { input } from './input.js';
 import { Radio } from './radio.js';
-import { initAudio, engine, splashSound, chime, screech } from './audio.js';
+import { initAudio, engine, splashSound, chime, screech, setSiren, setRotor } from './audio.js';
+import { Police } from './police.js';
+import { Bikes } from './bikes.js';
+import { BigMap } from './bigmap.js';
 import { Nav } from './nav.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const G = window.G = { input, time: 0, paused: false, defaultSun: 3.0, camMode: 0 };
+const G = window.G = { input, time: 0, paused: false, defaultSun: 3.0, camMode: 0, THREE };
 
 // settings that stick between visits (pause menu, Settings)
 const CAM_NAMES = ['Chase', 'Driver', 'Overhead'];
-const settings = G.settings = { arrows: true, cam: 0 };
+const settings = G.settings = { arrows: true, cam: 0, police: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('paradice-settings') || '{}')); } catch (e) { /* private mode */ }
 if (params.has('camMode')) settings.cam = +params.get('camMode');
 if (params.has('arrows')) settings.arrows = params.get('arrows') !== '0';
@@ -38,6 +41,7 @@ function setCamMode(m, toast) {
 function showSettings() {
   $('btnArrows').textContent = 'Road arrows: ' + (settings.arrows ? 'on' : 'off');
   $('btnCamera').textContent = 'Camera: ' + CAM_NAMES[G.camMode];
+  $('btnPolice').textContent = 'Police patrols: ' + (settings.police ? 'on' : 'off');
   if (G.nav) G.nav.enabled = settings.arrows;
 }
 
@@ -198,6 +202,7 @@ async function getVehicle(id) {
   return G.vehicles[id];
 }
 function setActive(v) {
+  if (G.active && G.active !== v && G.active.kind === 'air') G.active.root.removeFromParent();
   G.active = v;
   if (!v.root.parent) scene.add(v.root);
   if (v.trailerRoot && !v.trailerRoot.parent) scene.add(v.trailerRoot);
@@ -257,6 +262,7 @@ function updateCamera(dt, snap) {
   camera.up.set(0, 1, 0);
   // the driver view swaps a car's body for its cockpit; every other view shows the body
   for (const o of Object.values(G.vehicles)) if (o.cockpit) { const drv = o === v && G.camMode === 1 && !cine; o.cockpit.visible = drv; o.model.visible = !drv; }
+  if (G.camMode === 1 && v.kind === 'air') { airDriverView(v); return; }
   if (G.camMode === 1) {
     // driver's seat, looking down the road
     const seat = v.seat || v.hood;
@@ -267,11 +273,12 @@ function updateCamera(dt, snap) {
     camPos.copy(p); camLook.copy(ahead);
     return;
   }
+  if (v.kind === 'air' && G.camMode !== 2) { airCamera(v, dt, snap); return; }
   const big = v.kind === 'truck';
   if (G.camMode === 2) {
     // overhead: straight down, the way you are heading is up the screen
     const sp = Math.abs(v.speed);
-    const h = (big ? 80 : v.kind === 'boat' ? 70 : 44) + Math.min(30, sp * 0.9);
+    const h = (big ? 80 : v.kind === 'boat' ? 70 : v.fly === 'jet' ? 140 : v.kind === 'air' ? 60 : 44) + Math.min(v.kind === 'air' ? 90 : 30, sp * 0.9);
     const lead = Math.min(26, v.speed * 0.6) + (big ? -4 : 3);
     const want = new THREE.Vector3(v.pos.x + fx * lead, v.y + h, v.pos.z + fz * lead);
     if (snap) { camPos.copy(want); camUp.set(fx, 0, fz); }
@@ -299,6 +306,35 @@ function updateCamera(dt, snap) {
   camera.position.copy(camPos);
   if (G.shake > 0) { camera.position.x += (Math.random() - 0.5) * G.shake; camera.position.y += (Math.random() - 0.5) * G.shake; G.shake *= Math.exp(-dt * 6); }
   camera.lookAt(camLook);
+}
+// chase camera for the flyers: behind and above along the flight path, rolled a little with the jet's bank
+const _d3 = new THREE.Vector3(), _up = new THREE.Vector3();
+function airCamera(v, dt, snap) {
+  const [fx, fz] = v.fwd();
+  const jet = v.fly === 'jet', heli = v.fly === 'heli';
+  const g = jet ? v.gamma : 0;
+  _d3.set(fx * Math.cos(g), Math.sin(g), fz * Math.cos(g));
+  const dist = jet ? 24 + Math.min(10, v.speed * 0.04) : heli ? 17 : 6.5 + Math.min(4, Math.abs(v.speed) * 0.08);
+  const hgt = jet ? 6 : heli ? 6 : 2.4;
+  const want = new THREE.Vector3(v.pos.x - _d3.x * dist, v.y + hgt - _d3.y * dist * 0.6, v.pos.z - _d3.z * dist);
+  want.y = Math.max(want.y, v.groundAt(world, want.x, want.z, want.y + 2) + 1.5);
+  const look = new THREE.Vector3(v.pos.x + _d3.x * 10, v.y + (jet ? 3 : heli ? 1.5 : 1.3) + _d3.y * 10, v.pos.z + _d3.z * 10);
+  if (snap) { camPos.copy(want); camLook.copy(look); }
+  camPos.lerp(want, 1 - Math.exp(-dt * (jet ? 6 : 5)));
+  camLook.lerp(look, 1 - Math.exp(-dt * 10));
+  camera.position.copy(camPos);
+  if (G.shake > 0) { camera.position.x += (Math.random() - 0.5) * G.shake; camera.position.y += (Math.random() - 0.5) * G.shake; G.shake *= Math.exp(-dt * 6); }
+  _up.set(0, 1, 0).applyAxisAngle(_d3, jet ? v.bank * 0.35 : 0);
+  camera.up.copy(_up);
+  camera.lookAt(camLook);
+}
+function airDriverView(v) {
+  v.root.updateMatrixWorld(true);
+  const p = v.seat.clone(); v.body.localToWorld(p);
+  const ahead = v.seat.clone().add(new THREE.Vector3(40, -2, 0)); v.body.localToWorld(ahead);
+  camera.up.set(0, 1, 0).applyQuaternion(v.body.getWorldQuaternion(new THREE.Quaternion()));
+  camera.position.copy(p); camera.lookAt(ahead);
+  camPos.copy(p); camLook.copy(ahead);
 }
 G.celebrate = (front, cb) => {
   cine = { pos: new THREE.Vector3(front.x, front.y, front.z), look: front.look.clone() };
@@ -373,7 +409,7 @@ function updateIntro(dt) {
 }
 
 // ---------------------------------------------------------------- select screen
-const sel = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200), idx: 0, holder: new THREE.Group(), token: 0 };
+const sel = G.sel = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200), idx: 0, holder: new THREE.Group(), token: 0 };
 {
   const s = sel.scene;
   G.selScene = s; s.environment = G.envTex;
@@ -425,9 +461,16 @@ async function showVehicle(i) {
     disp.position.x = -(rb.min.x + rb.max.x) / 2; disp.position.z = -(rb.min.z + rb.max.z) / 2;
   } else {
     const m = v.model.clone(true); m.visible = true; disp.add(m);
-    if (def.kind === 'boat') { disp.position.y = 0.55; disp.scale.setScalar(0.85); }
     const pin = v.pin.clone(true); pin.position.copy(v.pin.position); pin.scale.copy(v.pin.scale); disp.add(pin);
     pin.userData.hub = pin.children[1];
+    if (def.kind === 'boat') { disp.position.y = 0.55; disp.scale.setScalar(0.85); }
+    if (def.kind === 'air') {
+      // the jet and helicopter shrink to fit the turntable, the jetpack pilot grows
+      const bb = new THREE.Box3().setFromObject(disp), size = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
+      const k = def.fly === 'jetpack' ? 2.4 : Math.min(1, 6.6 / size);
+      disp.scale.setScalar(k);
+      disp.position.x = -(bb.min.x + bb.max.x) / 2 * k;
+    }
   }
   sel.holder.add(disp);
   sel.disp = disp;
@@ -438,6 +481,7 @@ function updateSelect(dt) {
   if (input.up) showVehicle(sel.idx - 1);
   if (input.down) showVehicle(sel.idx + 1);
   if (input.confirm) startDrive();
+  if (G.started && G.active && (input.vehicles || input.pause)) closeSelect();
   renderer.render(sel.scene, sel.cam);
 }
 async function startDrive() {
@@ -447,6 +491,8 @@ async function startDrive() {
   $('select').style.display = 'none';
   $('hud').style.display = 'block';
   G.mode = 'play';
+  stopMissionQuietly();
+  const from = G.active && G.started ? { x: G.active.pos.x, z: G.active.pos.z, h: G.active.heading, y: G.active.y, kind: G.active.kind } : null;
   if (G.active && G.active.kind === 'truck') G.leaveTruck(true);
   const carDef = def.kind === 'car' ? def : (G.car ? G.car.def : VEHICLES[0]);
   const car = await getVehicle(carDef.id);
@@ -455,7 +501,22 @@ async function startDrive() {
   const boat = await getVehicle('boat');
   scene.add(boat.root);
   if (!G.started) boat.place(G.dockBoat.x, G.dockBoat.z, 0, -0.35);
-  if (def.kind === 'boat') {
+  if (def.kind === 'air') {
+    const f = await getVehicle(def.id);
+    let x, z, h;
+    if (from) { x = from.x; z = from.z; h = from.h; }
+    else {
+      const sp = world.nearestRoadPoint(...xz(...PLACES.spawn.ll), { name: 'Gulf of Mexico Drive', ground: true });
+      x = sp.x; z = sp.z; h = Math.cos(sp.heading) > 0 ? sp.heading + Math.PI : sp.heading;
+    }
+    if (!G.started) { const r = world.nearestRoadPoint(x, z, { ground: true }); car.place(r.x, r.z, r.heading, 0); }
+    car.root.removeFromParent();
+    if (from && from.kind === 'air' && G.active === f) { /* same flyer: carry on */ }
+    else f.launch(x, z, h, world);
+    if (!f.root.parent) scene.add(f.root);
+    setActive(f);
+    G.hud.toast(def.fly === 'jet' ? 'Fighter jet: W throttle, A/D bank, Space pull up, Shift dive' : 'Space to climb, Shift to come down, W to fly forward', 4);
+  } else if (def.kind === 'boat') {
     const r = world.nearestRoadPoint(G.dockCar.x, G.dockCar.z, { ground: true });
     car.place(r.x, r.z, r.heading, 0); scene.add(car.root);
     await G.goBoat(G.dockBoat.x + 12, G.dockBoat.z, 0);
@@ -469,7 +530,12 @@ async function startDrive() {
       const sp = world.nearestRoadPoint(...xz(...PLACES.spawn.ll), { name: 'Gulf of Mexico Drive', ground: true });
       const h0 = Math.cos(sp.heading) > 0 ? sp.heading + Math.PI : sp.heading; // facing up the key, toward the sunset
       car.place(sp.x, sp.z, h0, 0);
-    } else if (G.active) car.place(G.active.pos.x, G.active.pos.z, G.active.heading, G.active.kind === 'boat' ? 0 : G.active.y);
+    } else if (from && (from.kind === 'boat' || from.kind === 'air')) {
+      // from the water or the sky: the nearest road below
+      const r = world.nearestRoadPoint(from.x, from.z, { ground: true });
+      car.place(r.x, r.z, r.heading, 0);
+    } else if (G.active) car.place(G.active.pos.x, G.active.pos.z, G.active.heading, G.active.y);
+    if (!car.root.parent) scene.add(car.root);
     setActive(car);
   }
   G.started = true;
@@ -480,8 +546,30 @@ G.openSelect = () => {
   $('select').style.display = 'flex';
   $('hud').style.display = 'none';
   $('menu').style.display = 'none';
+  $('selBack').style.display = G.started ? 'block' : 'none';
+  screech(0); engine(0, 0, 'car', false);
+  // start on the vehicle you are in
+  if (G.active) { const i = VEHICLES.findIndex((d) => d.id === G.active.def.id); if (i >= 0) sel.idx = i; }
   showVehicle(sel.idx);
 };
+function closeSelect() {
+  $('select').style.display = 'none';
+  $('hud').style.display = 'block';
+  G.mode = 'play';
+  updateCamera(0.016, true);
+}
+$('selBack').onclick = closeSelect;
+// changing vehicles ends a mission without the end card
+function stopMissionQuietly() {
+  const M = G.missions;
+  if (!M || !M.active) return;
+  const id = M.active.id;
+  M.end('Mission stopped', 'You changed vehicles.', false);
+  G.hud.closeCard(); G.paused = false;
+  if (G.store && G.store.group.userData.bday) G.store.group.userData.bday.visible = false;
+  M.showStartMarkers(true);
+  if (id === 'run' && G.active && G.active.kind === 'truck') G.leaveTruck(true);
+}
 
 // ---------------------------------------------------------------- pause menu
 function openMenu() {
@@ -499,15 +587,48 @@ function openMenu() {
 }
 function closeMenu() { $('menu').style.display = 'none'; G.mode = 'play'; }
 $('btnResume').onclick = closeMenu;
-$('btnVehicle').onclick = () => { closeMenu(); if (G.missions.active) G.missions.end('Mission stopped', 'You changed vehicles.', false); G.hud.closeCard(); G.paused = false; G.openSelect(); };
+$('btnVehicle').onclick = () => { closeMenu(); G.openSelect(); };
 $('btnCredits').onclick = () => { $('credits').style.display = 'block'; };
 $('btnCreditsClose').onclick = () => { $('credits').style.display = 'none'; };
 $('btnArrows').onclick = () => { settings.arrows = !settings.arrows; saveSettings(); showSettings(); };
 $('btnCamera').onclick = () => setCamMode(G.camMode + 1);
-$('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; if (G.boats) G.boats.enabled = G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
+$('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; if (G.boats) G.boats.enabled = G.traffic.enabled; if (G.bikes) G.bikes.enabled = G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
+$('btnPolice').onclick = () => { settings.police = !settings.police; saveSettings(); if (!settings.police) G.police.stop(true); showSettings(); };
 function fillCredits() {
   const seen = new Set();
   $('creditList').innerHTML = VEHICLES.filter((v) => !seen.has(v.credit) && seen.add(v.credit)).map((v) => `<li><b>${v.name}</b>: ${CREDITS[v.credit]}</li>`).join('');
+}
+
+// ---------------------------------------------------------------- map target (dropped on the big map)
+G.setWaypoint = (p) => {
+  G.waypoint = p ? { x: p.x, z: p.z, y: 0 } : null;
+  if (!G.wpMarker) {
+    G.wpMarker = makeMarker(0xff4fd8, 'Target');
+    // a tall beam so the target shows from the sky too
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 600, 16, 1, true).translate(0, 300, 0),
+      new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    G.wpMarker.add(beam);
+    scene.add(G.wpMarker);
+  }
+  G.wpMarker.visible = !!p;
+  if (p) {
+    const r = world.roadAt(p.x, p.z, 0);
+    G.wpMarker.position.set(p.x, r ? r.y : world.isLand(p.x, p.z) ? 0 : -0.3, p.z);
+    G.hud.toast('Target set. Follow the pink X' + (settings.arrows ? ' and the road arrows' : ''), 2.5);
+  }
+  $('wp').style.display = p ? 'block' : 'none';
+};
+function updateWaypoint(dt, v) {
+  const w = G.waypoint;
+  if (!w) return;
+  G.wpMarker.userData.ring.rotation.z += dt;
+  const dx = w.x - v.pos.x, dz = w.z - v.pos.z, d = Math.hypot(dx, dz);
+  const miles = d / 1609.34;
+  // which way to turn: angle between heading and the target, screen-up is straight ahead
+  const rel = Math.atan2(-dz, dx) - v.heading;
+  $('wpArrow').style.transform = `rotate(${-rel}rad)`;
+  $('wpDist').textContent = miles >= 0.1 ? miles.toFixed(1) + ' mi' : Math.round(d * 3.281) + ' ft';
+  if (d < (v.kind === 'air' ? 45 : 22)) { chime('win'); G.hud.toast('You made it to the target', 2.5); G.setWaypoint(null); }
 }
 
 // ---------------------------------------------------------------- play loop
@@ -516,6 +637,8 @@ function updatePlay(dt) {
   const v = G.active;
   if (input.camera) setCamMode(G.camMode + 1, true);
   if (input.pause) { openMenu(); return; }
+  if (input.vehicles) { G.openSelect(); return; }
+  if (input.map) { G.bigmap.open(); return; }
   const frozen = G.paused || G.hud.cardOpen();
   const inp = frozen ? { throttle: 0, brake: 1, steer: 0, handbrake: false } : input;
   v.events.length = 0;
@@ -524,7 +647,7 @@ function updatePlay(dt) {
   const boat = G.vehicles.boat;
   if (boat && boat !== v) boat.update(dt, { throttle: 0, brake: 0, steer: 0 }, world, null);
   if (v.kind !== 'boat') {
-    const hit = G.traffic.collide(v);
+    const hit = Math.max(G.traffic.collide(v), G.bikes.collide(v), G.police.collide(v));
     if (hit > 3) v.events.push({ type: 'crash', impact: hit });
   } else {
     const hit = G.boats.collide(v);
@@ -532,6 +655,7 @@ function updatePlay(dt) {
   }
   for (const e of v.events) {
     if (e.type === 'crash') { G.shake = Math.min(0.6, e.impact * 0.03); }
+    if (e.type === 'pullup') { G.hud.toast('Pull up! Pull up!', 1.6); chime('bad'); }
     if (e.type === 'water' && !G.sinking) {
       G.sinking = 1.4;
       splashSound();
@@ -562,14 +686,20 @@ function updatePlay(dt) {
   G.boats.update(dt, v, G.fx, !G.boatsSeeded); G.boatsSeeded = true;
   areaT -= dt;
   if (areaT <= 0) { areaT = 0.5; area = world.areaName(v.pos.x, v.pos.z, v.lastRoad); }
-  const limit = v.kind === 'boat' ? null : G.missions.limitAt(v);
-  G.hud.update(dt, v, limit, area, G.missions.minimapMarkers());
-  engine(Math.min(1, Math.abs(v.speed) / v.top), inp.throttle || 0, v.kind, true);
+  G.police.update(dt, v, settings.police && !G.missions.active);
+  G.bikes.update(dt, v);
+  const limit = v.kind === 'boat' || v.kind === 'air' ? null : G.missions.limitAt(v);
+  const marks = G.missions.minimapMarkers().concat(G.police.minimapMarkers());
+  if (G.waypoint) marks.push({ x: G.waypoint.x, z: G.waypoint.z, color: '#ff4fd8', big: true, letter: 'X' });
+  G.hud.update(dt, v, limit, area, marks);
+  updateWaypoint(dt, v);
+  engine(Math.min(1, Math.abs(v.speed) / v.top), v.kind === 'air' ? Math.max(inp.throttle || 0, Math.abs(inp.lift || 0)) : inp.throttle || 0, v.fly || v.kind, true);
+  setRotor(G.missions.helis.length + (v.fly === 'heli' ? 1 : 0) + G.police.heliCount());
   // tires: loud with the handbrake on at speed, a quieter chirp in any big slide
   const spd = Math.abs(v.speed), slide = v.drift || 0;
-  const onTires = v.kind !== 'boat' && !G.sinking && !frozen;
+  const onTires = v.kind !== 'boat' && v.kind !== 'air' && !G.sinking && !frozen;
   screech(!onTires ? 0 : inp.handbrake && spd > 4 ? THREE.MathUtils.clamp(spd / 22 + slide / 14, 0.3, 1) : slide > 7 ? 0.25 : 0);
-  G.nav.update(dt, v, G.missions.navTarget());
+  G.nav.update(dt, v, G.missions.navTarget() || G.waypoint);
   // arrows only show ahead of the car, so say so when the route is behind it
   G.behindT = G.nav.mesh.visible && G.nav.behind && Math.abs(v.speed) > 4 ? (G.behindT || 0) + dt : 0;
   if (G.behindT > 2.5) { G.behindT = -6; G.hud.toast('Turn around: the road arrows are behind you', 2.5); }
@@ -590,6 +720,7 @@ function frame(now) {
   waterUniforms.uTime.value = G.time;
   if (G.mode === 'select') { updateSelect(dt); return; }
   if (G.mode === 'intro') { updateIntro(dt); return; }
+  if (G.mode === 'map') { screech(0); engine(0, 0, 'car', false); G.bigmap.update(dt); return; }
   if (G.mode !== 'play') screech(0);
   if (G.mode === 'menu') { if (input.pause) closeMenu(); }
   if (G.mode === 'play' && G.active) updatePlay(dt);
@@ -601,6 +732,9 @@ function frame(now) {
   sun.position.set(ap.x + sunDir.x * 300, Math.max(40, sunDir.y * 300 + 60), ap.z + sunDir.z * 300);
   sun.target.position.set(ap.x, 0, ap.z);
   sky.position.copy(camera.position);
+  const high = G.active.kind === 'air' ? THREE.MathUtils.clamp((G.active.y - 40) / 260, 0, 1) : 0;
+  world.viewDist = 4300 + high * 3200;
+  scene.fog.far = 4200 + high * 4000; scene.fog.near = 450 + high * 900;
   world.update(camera.position);
   G.dockMarker.userData.ring.rotation.z += dt;
   renderer.render(scene, camera);
@@ -609,6 +743,7 @@ function frame(now) {
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   for (const c of [camera, sel.cam]) { c.aspect = innerWidth / innerHeight; c.updateProjectionMatrix(); }
+  if (G.bigmap) G.bigmap.resize();
   if (intro) { intro.cam.aspect = innerWidth / innerHeight; intro.cam.updateProjectionMatrix(); }
 });
 document.addEventListener('click', (e) => { if (e.target.closest('#card button')) { G.onCardClose && G.onCardClose(); G.onCardClose = null; } });
@@ -627,6 +762,9 @@ async function boot() {
     G.traffic = new Traffic(scene, world);
     G.boats = new BoatTraffic(scene, world);
     G.nav = new Nav(scene, world);
+    G.police = new Police(scene, world, G);
+    G.bikes = new Bikes(scene, world);
+    G.bigmap = new BigMap(G);
     showSettings();
     G.radio = new Radio((m) => G.hud.toast(m, 3));
     G.radio.load();
@@ -635,7 +773,8 @@ async function boot() {
     setLoad('Polishing the silver cars');
     await getVehicle(VEHICLES[0].id);
     setLoad('Warming up the helicopters');
-    G.missions.prewarm(renderer, camera);
+    G.missions.prewarm(renderer, camera, [...G.police.prewarmList(), ...G.bikes.prewarmList()]);
+    G.setWaypoint(null);
     $('loading').style.display = 'none';
     G.openSelect();
     requestAnimationFrame(frame);
