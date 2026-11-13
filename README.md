@@ -33,13 +33,13 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 - Free roam starts on Gulf of Mexico Drive. Arcade handling with speed-sensitive steering, handbrake drifts, building collisions. Cars that drive into the water splash and come back on the nearest road.
 - Dad's boat is tied up on the bay side of Longboat Key off Harbourside Drive (white marker). Drive to it and press E to swap; drive the boat back to the dock and press E to get the car back. Boat physics: planes at about 35 mph, drifty turns, the bow rises with throttle and settles, wake, spray, bobbing, the propeller spins. It stops at the shoreline and slides along it.
 - HUD: mph, the posted speed limit (from OpenStreetMap where tagged), area name, heading-up minimap with mission markers.
-- Light ambient traffic on the main roads (toggle in the pause menu). Golf carts with drivers cross near the Harbourside course and Bay Isles.
+- Light ambient traffic on the main roads (toggle in the pause menu). Golf carts with drivers cross near the Harbourside course and Bay Isles. 18 boats (center consoles, sailboats, pontoons, cruisers, skiffs) cruise the bay and gulf near you, steer around land, give your boat room and bump off it.
 
 ## Settings (pause menu, saved in the browser)
 
 - Road arrows on or off. During a car or truck mission, soft chevrons on the pavement lead to the next checkpoint along the real roads (`js/nav.js`: one shortest-path sweep per checkpoint, so a wrong turn re-routes at once). If the route is behind you a "Turn around" note appears. No arrows in free roam or on the boat.
 - Camera: Chase, Driver or Overhead (same as the C key). The driver view hides the car body and shows a simple cockpit with a steering wheel that turns, because the scanned and decimated models have no clean cabin. Overhead looks straight down with your heading up the screen.
-- Traffic on or off.
+- Traffic on or off (cars and boats).
 
 A gold "Dad's place" marker (D on the minimap) sits at the middle of Cutter Lane.
 
@@ -71,7 +71,7 @@ Also shown in game under Esc, Credits.
 - "2004 Audi TT Coupe 3.2 Quattro" by OUTPISTON (sketchfab.com/outpiston), CC BY-NC-SA 4.0. Repainted silver, decimated.
 - Kramer's 2024 Subaru Outback XT: his own phone scan (smoothed copy, decimated).
 - Dad's boat: built in Blender for this project, original.
-- Truck, trailer, crates, golf carts, police SUV, helicopters, store, warehouse, signs, freezer set, traffic cars: built in code here, original.
+- Truck, trailer, crates, golf carts, police SUV, helicopters, store, warehouse, signs, freezer set, traffic cars, traffic boats: built in code here, original.
 - three.js r169, MIT.
 
 The two CC BY-NC-SA cars mean the public site must stay free and non-commercial, with credits shown (in-game credits screen and this README).
@@ -86,7 +86,7 @@ The two CC BY-NC-SA cars mean the public site must stay free and non-commercial,
 
 ## Files
 
-- `index.html`, `js/main.js` (loop, cameras, select screen, swaps, intro, menus), `js/world.js` (map build and spatial queries), `js/vehicles.js` (car, boat, truck physics), `js/missions.js`, `js/models.js` (procedural models), `js/hud.js`, `js/traffic.js`, `js/water.js`, `js/sky.js`, `js/effects.js`, `js/input.js`, `js/audio.js`, `js/nav.js` (road arrows), `js/config.js`. `build/test/fixes.cjs` re-checks the 2026-11-13 fix pass (trailer, cameras, arrows, traps, select screen).
+- `index.html`, `js/main.js` (loop, cameras, select screen, swaps, intro, menus), `js/world.js` (map build and spatial queries), `js/vehicles.js` (car, boat, truck physics), `js/missions.js`, `js/models.js` (procedural models), `js/hud.js`, `js/traffic.js`, `js/boats.js` (boat traffic), `js/water.js`, `js/sky.js`, `js/effects.js`, `js/input.js`, `js/audio.js`, `js/nav.js` (road arrows), `js/config.js`. `build/test/fixes.cjs` re-checks the 2026-11-13 fix pass (trailer, cameras, arrows, traps, select screen). `build/test/boats.cjs` counts boat traffic and times the frame stall when a helicopter or the police appear (the helicopter used to freeze the game about 2.8 s; lights are now in the scene from the start and chase models are pre-compiled).
 - `build/fetch_osm.py`, `build/bake_world.py`, `build/retry_buildings.sh`, `build/decimate_cars.py`.
 - `build/test/`: headless Chrome checks (needs a puppeteer install; the scripts default to the one in `../esl-3d-viz/node_modules`). `shots.sh` regenerates the screenshots, `play.cjs` drives every mission end to end, `eval.cjs` prints expressions from a loaded game.
 - `screenshots/`: select screen, Longboat Key, Ringling Bridge at sunset, boat at the buoys, freezer intro, birthday sign, truck at the dock, golf cart.

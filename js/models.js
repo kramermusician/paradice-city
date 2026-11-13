@@ -500,3 +500,68 @@ export function mergeGroup(group) {
   out.add(mesh);
   return out;
 }
+
+// ---------------------------------------------------------------- ambient boats (bay and gulf traffic)
+// Forward is +x like the traffic cars. Waterline is y = 0 in the model.
+function hullGeo(len, wid, hgt) {
+  const s = new THREE.Shape();
+  s.moveTo(-len / 2, -wid / 2); s.lineTo(len * 0.18, -wid / 2); s.quadraticCurveTo(len * 0.42, -wid * 0.42, len / 2, 0);
+  s.quadraticCurveTo(len * 0.42, wid * 0.42, len * 0.18, wid / 2); s.lineTo(-len / 2, wid / 2); s.closePath();
+  return new THREE.ExtrudeGeometry(s, { depth: hgt, bevelEnabled: false, curveSegments: 4 }).rotateX(-Math.PI / 2);
+}
+function hull(len, wid, hgt, color, stripe) {
+  const g = new THREE.Group();
+  const h = new THREE.Mesh(hullGeo(len, wid, hgt), L(color)); h.position.y = -0.35; g.add(h);
+  if (stripe != null) { const s = new THREE.Mesh(hullGeo(len * 1.005, wid * 1.01, 0.18), L(stripe)); s.position.y = -0.3; g.add(s); }
+  return g;
+}
+const BOAT_KINDS = ['console', 'console', 'sail', 'pontoon', 'cruiser', 'console', 'sail', 'skiff'];
+export function makeTrafficBoat(i = 0) {
+  const kind = BOAT_KINDS[i % BOAT_KINDS.length];
+  const accents = [0x1f5fa8, 0xc23b2e, 0x2c8c6b, 0x223344, 0xe0a030, 0x6a4fa0];
+  const acc = accents[i % accents.length];
+  const white = L(0xf2f2ee), dark = L(0x2a2e33), tan = L(0xc8b48c);
+  const g = new THREE.Group();
+  let len = 7;
+  if (kind === 'console') {
+    len = 7 + (i % 3);
+    g.add(hull(len, 2.5, 1.0, 0xf4f4f0, acc));
+    g.add(box(len * 0.85, 0.05, 2.2, tan, -0.2, 0.66, 0));
+    g.add(box(0.9, 1.0, 1.0, white, 0.2, 1.15, 0));
+    g.add(box(0.1, 0.4, 0.9, L(0x30404c), 0.68, 1.85, 0));
+    g.add(box(2.4, 0.08, 2.0, L(acc), -0.2, 2.5, 0));
+    for (const [x, z] of [[0.8, 0.9], [0.8, -0.9], [-1.2, 0.9], [-1.2, -0.9]]) g.add(box(0.05, 1.8, 0.05, L(0xbfc3c7), x, 1.6, z));
+    g.add(box(0.7, 0.9, 0.6, dark, -len / 2 - 0.1, 0.6, 0));
+  } else if (kind === 'skiff') {
+    len = 5;
+    g.add(hull(len, 1.9, 0.8, 0x9fb7c4, null));
+    g.add(box(0.5, 0.7, 0.4, dark, -2.6, 0.4, 0));
+    g.add(box(0.6, 0.6, 0.4, L(0xe0c070), 0.3, 0.75, 0));
+  } else if (kind === 'sail') {
+    len = 9;
+    g.add(hull(len, 2.8, 1.1, 0xf6f6f2, acc));
+    g.add(box(2.6, 0.6, 1.8, white, 0.3, 1.0, 0));
+    g.add(cyl(0.08, 11, L(0xbfc3c7), 0.8, 6.2, 0, 'y', 6));
+    g.add(cyl(0.05, 4.0, L(0xbfc3c7), -1.2, 1.9, 0, 'x', 6));
+    const sail = (pts) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); geo.computeVertexNormals(); return new THREE.Mesh(geo, L(0xfbfaf4, { side: THREE.DoubleSide })); };
+    // both windings, since the merged traffic material is single-sided
+    g.add(sail([0.7, 1.95, 0, 0.7, 11.4, 0, -3.1, 1.95, 0, 0.7, 1.95, 0, -3.1, 1.95, 0, 0.7, 11.4, 0]));
+    g.add(sail([0.9, 10.2, 0, 4.2, 1.2, 0, 0.9, 1.6, 0, 0.9, 10.2, 0, 0.9, 1.6, 0, 4.2, 1.2, 0]));
+  } else if (kind === 'pontoon') {
+    len = 8;
+    for (const z of [-1.0, 1.0]) { g.add(cyl(0.38, len - 0.6, L(0xd0d4d8), -0.2, 0, z, 'x', 10)); }
+    g.add(box(len - 0.4, 0.15, 2.6, tan, -0.2, 0.5, 0));
+    g.add(box(len - 0.6, 0.6, 0.06, L(acc), -0.2, 0.9, 1.28)); g.add(box(len - 0.6, 0.6, 0.06, L(acc), -0.2, 0.9, -1.28));
+    g.add(box(3.6, 0.08, 2.5, L(0xeeeeee), -0.6, 2.4, 0));
+    g.add(box(0.7, 0.7, 0.6, dark, -len / 2, 0.5, 0));
+  } else {
+    len = 12;
+    g.add(hull(len, 3.6, 1.5, 0xf8f8f6, acc));
+    g.add(box(5.5, 1.2, 3.0, white, -0.4, 1.7, 0));
+    g.add(box(4.0, 0.5, 3.04, L(0x22303c), 0.2, 1.9, 0));
+    g.add(box(3.0, 0.9, 2.4, white, -0.8, 2.75, 0));
+    g.add(box(1.5, 0.08, 3.2, tan, -len / 2 + 0.6, 0.9, 0));
+  }
+  g.userData = { kind, len, wid: kind === 'cruiser' ? 3.6 : kind === 'skiff' ? 1.9 : 2.7, speed: kind === 'sail' ? 4 : kind === 'pontoon' ? 6 : kind === 'skiff' ? 7 : kind === 'cruiser' ? 10 : 13 };
+  return g;
+}

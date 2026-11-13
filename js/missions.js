@@ -123,7 +123,18 @@ export class Missions {
 
     // --- police and helicopters (hidden until needed)
     this.police = makePoliceSUV(); this.police.visible = false; scene.add(this.police);
-    this.policeLight = new THREE.PointLight(0xff2020, 0, 30, 1.5); this.police.add(this.policeLight); this.policeLight.position.set(0, 3, 0);
+    // Lights live in the scene from the start at zero intensity. Adding or showing a light later
+    // changes the light count and makes three.js recompile every shader, which froze the game
+    // for a second or more when the police or a helicopter showed up.
+    this.policeLight = new THREE.PointLight(0xff2020, 0, 30, 1.5); this.policeLight.position.set(0, -500, 0); scene.add(this.policeLight);
+    this.heliSpot = new THREE.SpotLight(0xfff1c8, 0, 160, 0.18, 0.5, 1.6); this.heliSpot.position.set(0, -500, 0);
+    scene.add(this.heliSpot, this.heliSpot.target);
+    this.heliPool = [0, 1, 2].map(() => {
+      const h = makeHelicopter();
+      const sp = h.userData.spot; sp.target.removeFromParent(); sp.removeFromParent();
+      h.visible = false; scene.add(h);
+      return h;
+    });
     this.helis = [];
     this.trail = [];
   }
@@ -399,6 +410,7 @@ export class Missions {
     else { const p = this.trail[this.trail.length - 28]; this.police.position.set(p[0], p[2], p[1]); }
     this.police.rotation.y = v.heading;
     this.policeLight.intensity = 60;
+    this.policeLight.position.copy(this.police.position).y += 3;
     setSiren(true);
     G.hud.toast(`${mph} in a ${lim}. Lights behind you: pull over.`, 3);
   }
@@ -419,6 +431,7 @@ export class Missions {
     this.police.userData.red.emissiveIntensity = flash ? 4 : 0.2;
     this.police.userData.blue.emissiveIntensity = flash ? 0.2 : 4;
     this.policeLight.color.set(flash ? 0xff2020 : 0x2050ff);
+    this.policeLight.position.copy(this.police.position).y += 3;
     const stopped = Math.abs(v.speed) < 1.0 && !(this.G.input.brake > 0 && v.speed < -0.3);
     P2.stillT = stopped ? P2.stillT + dt : 0;
     if (P2.phase === 'pull') {
@@ -435,8 +448,13 @@ export class Missions {
         h.userData.rotor.rotation.y += dt * 30;
         h.userData.tail.rotation.z += dt * 40;
         const s = h.userData.spot;
-        s.target.position.copy(h.worldToLocal(new THREE.Vector3(v.pos.x, v.y, v.pos.z)));
-        const dir = s.target.position.clone().sub(s.position);
+        const dir = h.worldToLocal(new THREE.Vector3(v.pos.x, v.y, v.pos.z)).sub(s.position);
+        if (i === 0) {
+          h.updateMatrixWorld();
+          this.heliSpot.position.copy(h.localToWorld(s.position.clone()));
+          this.heliSpot.target.position.set(v.pos.x, v.y, v.pos.z);
+          this.heliSpot.intensity = 6000;
+        }
         const cone = h.userData.cone;
         cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir.clone().normalize());
         cone.scale.set(1, dir.length() / 60, 1);
@@ -446,18 +464,26 @@ export class Missions {
     }
   }
   addHeli() {
-    const h = makeHelicopter();
+    const h = this.heliPool[this.helis.length];
+    if (!h) return;
     const v = this.G.active;
     h.position.set(v.pos.x - 200, 80, v.pos.z - 100);
-    this.G.scene.add(h);
+    h.visible = true;
     this.helis.push(h);
     this.G.hud.toast('A helicopter joins the chase', 2);
   }
   clearPolice() {
     this.police.visible = false; this.policeLight.intensity = 0;
-    for (const h of this.helis) h.removeFromParent();
-    this.helis = [];
+    for (const h of this.helis) h.visible = false;
+    this.helis = []; this.heliSpot.intensity = 0;
     setSiren(false); setRotor(0);
+  }
+  // compile the hidden chase models' shaders up front so they appear without a stall
+  prewarm(renderer, camera) {
+    const hidden = [this.police, ...this.heliPool];
+    hidden.forEach((o) => { o.visible = true; });
+    try { renderer.compile(this.G.scene, camera); } catch (e) { /* best effort */ }
+    hidden.forEach((o) => { o.visible = false; });
   }
   finishRun(a, v) {
     const G = this.G;

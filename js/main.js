@@ -8,6 +8,7 @@ import { createVehicle } from './vehicles.js';
 import { HUD } from './hud.js';
 import { Missions } from './missions.js';
 import { Traffic } from './traffic.js';
+import { BoatTraffic } from './boats.js';
 import { Particles } from './effects.js';
 import { input } from './input.js';
 import { Radio } from './radio.js';
@@ -193,7 +194,12 @@ function buildSetPieces() {
 // ---------------------------------------------------------------- vehicles
 G.vehicles = {};
 async function getVehicle(id) {
-  if (!G.vehicles[id]) G.vehicles[id] = await createVehicle(VEHICLES.find((v) => v.id === id));
+  if (!G.vehicles[id]) {
+    const v = await createVehicle(VEHICLES.find((d) => d.id === id));
+    // compile its shaders now (against the main scene's lights) so the first frame it appears doesn't stall
+    try { renderer.compile(v.root, camera, scene); if (v.trailerRoot) renderer.compile(v.trailerRoot, camera, scene); } catch (e) { /* warm-up is best effort */ }
+    G.vehicles[id] = v;
+  }
   return G.vehicles[id];
 }
 function setActive(v) {
@@ -503,7 +509,7 @@ $('btnCredits').onclick = () => { $('credits').style.display = 'block'; };
 $('btnCreditsClose').onclick = () => { $('credits').style.display = 'none'; };
 $('btnArrows').onclick = () => { settings.arrows = !settings.arrows; saveSettings(); showSettings(); };
 $('btnCamera').onclick = () => setCamMode(G.camMode + 1);
-$('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
+$('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; if (G.boats) G.boats.enabled = G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
 function fillCredits() {
   const seen = new Set();
   $('creditList').innerHTML = VEHICLES.filter((v) => !seen.has(v.credit) && seen.add(v.credit)).map((v) => `<li><b>${v.name}</b>: ${CREDITS[v.credit]}</li>`).join('');
@@ -525,6 +531,9 @@ function updatePlay(dt) {
   if (v.kind !== 'boat') {
     const hit = G.traffic.collide(v);
     if (hit > 3) v.events.push({ type: 'crash', impact: hit });
+  } else {
+    const hit = G.boats.collide(v);
+    if (hit) { v.sync(); if (hit > 3) v.events.push({ type: 'crash', impact: hit }); }
   }
   for (const e of v.events) {
     if (e.type === 'crash') { G.shake = Math.min(0.6, e.impact * 0.03); }
@@ -555,6 +564,7 @@ function updatePlay(dt) {
   }
   G.missions.update(dt);
   G.traffic.update(dt, v);
+  G.boats.update(dt, v, G.fx, !G.boatsSeeded); G.boatsSeeded = true;
   areaT -= dt;
   if (areaT <= 0) { areaT = 0.5; area = world.areaName(v.pos.x, v.pos.z, v.lastRoad); }
   const limit = v.kind === 'boat' ? null : G.missions.limitAt(v);
@@ -620,6 +630,7 @@ async function boot() {
     G.missions = new Missions(G);
     G.missions.setup();
     G.traffic = new Traffic(scene, world);
+    G.boats = new BoatTraffic(scene, world);
     G.nav = new Nav(scene, world);
     showSettings();
     G.radio = new Radio((m) => G.hud.toast(m, 3));
@@ -628,6 +639,8 @@ async function boot() {
     buildSelectList();
     setLoad('Polishing the silver cars');
     await getVehicle(VEHICLES[0].id);
+    setLoad('Warming up the helicopters');
+    G.missions.prewarm(renderer, camera);
     $('loading').style.display = 'none';
     G.openSelect();
     requestAnimationFrame(frame);
