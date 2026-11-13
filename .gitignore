@@ -9,3 +9,4 @@ build.log
 .DS_Store
 assets/music/*.mp3
 publish.sh
+assets/cars/lucid-air.glb

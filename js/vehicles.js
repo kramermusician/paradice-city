@@ -240,6 +240,19 @@ export class Boat extends Vehicle {
     const bb = new THREE.Box3().setFromObject(model);
     this.len = 6.6; this.wid = 2.4; this.hgt = bb.max.y;
     this.prop = model.getObjectByName('prop');
+    const b = this.def.boat;
+    if (b) {
+      // a small craft from the Dropbox set (jet ski): sits a little lower in the water than Dad's hull
+      this.len = b.len; this.wid = b.wid;
+      model.position.y = 0.12;
+      this.pin = makePinwheel();
+      this.pin.position.set(...b.pin); this.pin.scale.setScalar(0.7);
+      this.body.add(this.pin);
+      this.hood = new THREE.Vector3(...b.seat);
+      this.seat = this.hood;
+      this.trim = 0; this.wakeT = 0;
+      return this;
+    }
     const canopy = model.getObjectByName('canopy');
     let top = 2.75;
     if (canopy) { const cb = new THREE.Box3().setFromObject(canopy); top = cb.max.y; }

@@ -2,6 +2,7 @@
 // Convention: front faces +X, up is +Y, ground at y = 0.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { PROPS } from './props.js';
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1, ...opts });
 const L = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
@@ -248,7 +249,24 @@ export function makeGolfCart(color = 0xffffff, shirt = 0x3a7bd5) {
 }
 
 // ---------------------------------------------------------------- police SUV (generic, no markings beyond a word)
+// The Ford Explorer police model from the Dropbox set, with our own light bar on the roof
+// (its flashing is driven by swapping the red and blue materials). Null if it did not load.
+function explorer() {
+  if (!PROPS.police) return null;
+  const m = PROPS.police.clone(true);
+  m.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+  const g = new THREE.Group(); g.add(m);
+  return g;
+}
 export function makePoliceSUV() {
+  const ex = explorer();
+  if (ex) {
+    const red = E(0xff1a1a, 0.2), blue = E(0x1a4dff, 0.2);
+    const lb = new THREE.Group(); lb.position.set(-0.35, 1.78, 0);
+    lb.add(box(0.3, 0.14, 0.62, red, 0, 0, 0.36)); lb.add(box(0.3, 0.14, 0.62, blue, 0, 0, -0.36));
+    ex.add(lb); ex.userData.red = red; ex.userData.blue = blue;
+    return ex;
+  }
   const g = new THREE.Group();
   const white = M(0xf5f5f5, { metalness: 0.4, roughness: 0.35 });
   const navy = M(0x1b2a4a, { metalness: 0.4, roughness: 0.35 });
@@ -668,6 +686,14 @@ export function makeCyclist(shirt = 0x3a7bd5, bike = 0x222222, skin = 0xc68e6b) 
 // Police cruiser built to share its light materials across the fleet: pass {red, blue} so a whole
 // fleet flashes in step and lights on or off is just a material swap (no new shaders mid-game).
 export function makePoliceCar() {
+  const ex = explorer();
+  if (ex) {
+    const red = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.62), null), blue = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.62), null);
+    red.position.set(-0.35, 1.78, 0.36); blue.position.set(-0.35, 1.78, -0.36);
+    ex.add(red, blue);
+    ex.userData = { red, blue };
+    return ex;
+  }
   const g = new THREE.Group();
   const white = M(0xf5f5f5, { metalness: 0.4, roughness: 0.35 }), navy = M(0x1b2a4a, { metalness: 0.4, roughness: 0.35 }), glass = M(0x111820, { metalness: 0.5, roughness: 0.1 });
   g.add(box(4.8, 0.7, 1.9, navy, 0, 0.7, 0));

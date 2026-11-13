@@ -1,6 +1,8 @@
 // Ambient boats on the bay and the gulf near the player. They cruise, steer away from
 // land by probing ahead, give the player's boat room, and respawn out of sight.
 import { makeTrafficBoat, mergeGroup } from './models.js';
+import { PROPS } from './props.js';
+import { ISLAND_LINE } from './config.js';
 
 const WATER_Y = -0.35;
 
@@ -9,9 +11,17 @@ export class BoatTraffic {
     this.world = world;
     this.boats = [];
     for (let i = 0; i < n; i++) {
-      const src = makeTrafficBoat(i);
-      const ud = src.userData;
-      const m = mergeGroup(src);
+      let src, ud, m;
+      if (PROPS.yacht && (i === 4 || i === 12)) {
+        // two big motor yachts from the Dropbox set (32 m), sitting about 1.4 m deep
+        const y = PROPS.yacht.clone(true); y.position.y = -1.05;
+        m = new y.constructor(); m.add(y);
+        ud = { kind: 'yacht', len: 32, wid: 7, speed: 5.5 };
+      } else {
+        src = makeTrafficBoat(i);
+        ud = src.userData;
+        m = mergeGroup(src);
+      }
       m.traverse((o) => { o.castShadow = false; });
       m.visible = false;
       scene.add(m);
@@ -31,7 +41,7 @@ export class BoatTraffic {
     for (let tries = 0; tries < 24; tries++) {
       const ang = Math.random() * Math.PI * 2, r = near ? 120 + Math.random() * 700 : 450 + Math.random() * 500;
       const x = px + Math.cos(ang) * r, z = pz + Math.sin(ang) * r;
-      if (!this.water(x, z, 18)) continue;
+      if (!this.water(x, z, b.kind === 'yacht' ? 40 : 18)) continue;
       // head somewhere open
       let h = Math.random() * Math.PI * 2;
       for (let k = 0; k < 8 && !this.water(x + Math.cos(h) * 60, z - Math.sin(h) * 60); k++) h += Math.PI / 4;
@@ -106,5 +116,49 @@ export class BoatTraffic {
       }
     }
     return hit;
+  }
+}
+
+// One LNG tanker (290 m) steaming slowly up and down the Gulf a few kilometers off the beach,
+// on a line parallel to the island. Always out there, so it reads as part of the horizon.
+export class Tanker {
+  constructor(scene, world) {
+    this.ok = !!PROPS.lng;
+    if (!this.ok) return;
+    this.m = PROPS.lng.clone(true);
+    this.m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    this.m.children.forEach((c) => { c.position.y -= 11; });   // about 11 m draft
+    scene.add(this.m);
+    // offset the island line toward the Gulf (left of the north-to-south direction)
+    const pts = [];
+    for (let i = 0; i < ISLAND_LINE.length; i++) {
+      const [x, z] = ISLAND_LINE[i], [ax, az] = ISLAND_LINE[Math.max(0, i - 1)], [bx, bz] = ISLAND_LINE[Math.min(ISLAND_LINE.length - 1, i + 1)];
+      const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1;
+      let off = 3200, px, pz;
+      do { px = x + (dz / l) * off; pz = z - (dx / l) * off; off += 400; } while (world.isLand(px, pz) && off < 8000);
+      if (world.inBounds(px, pz, 300)) pts.push([px, pz]);
+    }
+    this.pts = pts; this.d = Math.random() * 0.6 + 0.2; this.dir = 1; this.speed = 6.5;
+    this.len = 0; this.seg = [];
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); this.seg.push(l); this.len += l; }
+    this.s = this.len * this.d; this.h = 0; this.t = 0;
+    if (pts.length < 2) { this.ok = false; this.m.visible = false; }
+  }
+  at(s) {
+    let i = 0; while (i < this.seg.length - 1 && s > this.seg[i]) { s -= this.seg[i]; i++; }
+    const [ax, az] = this.pts[i], [bx, bz] = this.pts[i + 1], f = Math.min(1, s / this.seg[i]);
+    return [ax + (bx - ax) * f, az + (bz - az) * f, Math.atan2(-(bz - az), bx - ax)];
+  }
+  update(dt) {
+    if (!this.ok) return;
+    this.t += dt;
+    this.s += this.dir * this.speed * dt;
+    if (this.s > this.len - 200) { this.s = this.len - 200; this.dir = -1; }
+    if (this.s < 200) { this.s = 200; this.dir = 1; }
+    // it turns around only at the far ends of the map, where nobody is watching
+    const [x, z, h] = this.at(this.s);
+    this.h = this.dir > 0 ? h : h + Math.PI;
+    this.m.position.set(x, WATER_Y + Math.sin(this.t * 0.3) * 0.15, z);
+    this.m.rotation.set(0, this.h, Math.sin(this.t * 0.21) * 0.005, 'YXZ');
   }
 }

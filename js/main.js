@@ -8,7 +8,8 @@ import { createVehicle } from './vehicles.js';
 import { HUD } from './hud.js';
 import { Missions } from './missions.js';
 import { Traffic } from './traffic.js';
-import { BoatTraffic } from './boats.js';
+import { BoatTraffic, Tanker } from './boats.js';
+import { loadProps, Turtles, Flora } from './props.js';
 import { Particles } from './effects.js';
 import { input } from './input.js';
 import { Radio } from './radio.js';
@@ -208,8 +209,9 @@ function setActive(v) {
   if (v.trailerRoot && !v.trailerRoot.parent) scene.add(v.trailerRoot);
   G.hud && G.hud.hint('');
 }
+G.boatId = 'boat';
 G.goBoat = async (x, z, h) => {
-  const b = await getVehicle('boat');
+  const b = await getVehicle(G.boatId);
   if (G.active && G.active !== b && G.active.kind === 'car') { G.active.vel.set(0, 0); G.active.speed = 0; }
   if (x === undefined) { x = G.dockBoat.x; z = G.dockBoat.z; h = 0; }
   b.place(x, z, h, -0.35);
@@ -291,8 +293,8 @@ function updateCamera(dt, snap) {
     camera.lookAt(camLook);
     return;
   }
-  const dist = big ? 24 : v.kind === 'boat' ? 13 : 7.6 + Math.min(2.5, Math.abs(v.speed) * 0.05);
-  const hgt = big ? 8 : v.kind === 'boat' ? 4.6 : 3.0;
+  const dist = big ? 24 : v.kind === 'boat' ? (v.def.boat ? 7.5 : 13) : 7.6 + Math.min(2.5, Math.abs(v.speed) * 0.05);
+  const hgt = big ? 8 : v.kind === 'boat' ? (v.def.boat ? 2.8 : 4.6) : 3.0;
   // look back smoothly along velocity when reversing hard
   let hx = fx, hz = fz;
   if (v.speed < -3) { hx = -fx; hz = -fz; }
@@ -434,6 +436,7 @@ function buildSelectList() {
   VEHICLES.forEach((v, i) => {
     const b = document.createElement('button');
     b.innerHTML = `<span class="vn">${v.name}</span><span class="vy">${v.year}</span>`;
+    b.dataset.id = v.id;
     b.onclick = () => { initAudio(); showVehicle(i); };
     b.ondblclick = () => startDrive();
     list.appendChild(b);
@@ -498,7 +501,12 @@ async function startDrive() {
   const car = await getVehicle(carDef.id);
   if (G.car && G.car !== car) G.car.root.removeFromParent();
   G.car = car;
-  const boat = await getVehicle('boat');
+  if (def.kind === 'boat' && def.id !== G.boatId) {
+    // switching hulls (Dad's boat or the jet ski): the old one leaves the dock
+    const old = G.vehicles[G.boatId]; if (old) old.root.removeFromParent();
+    G.boatId = def.id;
+  }
+  const boat = await getVehicle(G.boatId);
   scene.add(boat.root);
   if (!G.started) boat.place(G.dockBoat.x, G.dockBoat.z, 0, -0.35);
   if (def.kind === 'air') {
@@ -596,7 +604,8 @@ $('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; if (G.
 $('btnPolice').onclick = () => { settings.police = !settings.police; saveSettings(); if (!settings.police) G.police.stop(true); showSettings(); };
 function fillCredits() {
   const seen = new Set();
-  $('creditList').innerHTML = VEHICLES.filter((v) => !seen.has(v.credit) && seen.add(v.credit)).map((v) => `<li><b>${v.name}</b>: ${CREDITS[v.credit]}</li>`).join('');
+  $('creditList').innerHTML = VEHICLES.filter((v) => !seen.has(v.credit) && seen.add(v.credit)).map((v) => `<li><b>${v.name}</b>: ${CREDITS[v.credit]}</li>`).join('')
+    + ['police', 'yacht', 'lng', 'turtle', 'palms', 'bush'].map((k) => `<li>${CREDITS[k]}</li>`).join('');
 }
 
 // ---------------------------------------------------------------- map target (dropped on the big map)
@@ -644,7 +653,7 @@ function updatePlay(dt) {
   v.events.length = 0;
   v.update(dt, inp, world, G.fx);
   // the parked boat keeps bobbing at the dock
-  const boat = G.vehicles.boat;
+  const boat = G.vehicles[G.boatId];
   if (boat && boat !== v) boat.update(dt, { throttle: 0, brake: 0, steer: 0 }, world, null);
   if (v.kind !== 'boat') {
     const hit = Math.max(G.traffic.collide(v), G.bikes.collide(v), G.police.collide(v));
@@ -684,6 +693,8 @@ function updatePlay(dt) {
   G.missions.update(dt);
   G.traffic.update(dt, v);
   G.boats.update(dt, v, G.fx, !G.boatsSeeded); G.boatsSeeded = true;
+  G.tanker.update(dt);
+  G.turtles.update(dt, v);
   areaT -= dt;
   if (areaT <= 0) { areaT = 0.5; area = world.areaName(v.pos.x, v.pos.z, v.lastRoad); }
   G.police.update(dt, v, settings.police && !G.missions.active);
@@ -736,6 +747,7 @@ function frame(now) {
   world.viewDist = 4300 + high * 3200;
   scene.fog.far = 4200 + high * 4000; scene.fog.near = 450 + high * 900;
   world.update(camera.position);
+  if (G.flora) G.flora.update(dt, G.active.pos);
   G.dockMarker.userData.ring.rotation.z += dt;
   renderer.render(scene, camera);
 }
@@ -753,7 +765,10 @@ document.addEventListener('drive', () => startDrive());
 async function boot() {
   try {
     world.beforeBuildings = placeStoreAndWarehouse;
+    const propsReady = loadProps();
     await world.load(scene, setLoad);
+    setLoad('Unloading the yachts');
+    await propsReady;
     setLoad('Setting the scene');
     buildSetPieces();
     G.hud = new HUD(world);
@@ -761,6 +776,9 @@ async function boot() {
     G.missions.setup();
     G.traffic = new Traffic(scene, world);
     G.boats = new BoatTraffic(scene, world);
+    G.tanker = new Tanker(scene, world);
+    G.turtles = new Turtles(scene, world);
+    G.flora = new Flora(scene, world);
     G.nav = new Nav(scene, world);
     G.police = new Police(scene, world, G);
     G.bikes = new Bikes(scene, world);
