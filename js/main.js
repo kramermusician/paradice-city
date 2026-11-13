@@ -194,12 +194,7 @@ function buildSetPieces() {
 // ---------------------------------------------------------------- vehicles
 G.vehicles = {};
 async function getVehicle(id) {
-  if (!G.vehicles[id]) {
-    const v = await createVehicle(VEHICLES.find((d) => d.id === id));
-    // compile its shaders now (against the main scene's lights) so the first frame it appears doesn't stall
-    try { renderer.compile(v.root, camera, scene); if (v.trailerRoot) renderer.compile(v.trailerRoot, camera, scene); } catch (e) { /* warm-up is best effort */ }
-    G.vehicles[id] = v;
-  }
+  if (!G.vehicles[id]) G.vehicles[id] = await createVehicle(VEHICLES.find((v) => v.id === id));
   return G.vehicles[id];
 }
 function setActive(v) {
