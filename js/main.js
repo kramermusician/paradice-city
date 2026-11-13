@@ -11,12 +11,34 @@ import { Traffic } from './traffic.js';
 import { Particles } from './effects.js';
 import { input } from './input.js';
 import { Radio } from './radio.js';
-import { initAudio, engine, splashSound, chime } from './audio.js';
+import { initAudio, engine, splashSound, chime, screech } from './audio.js';
+import { Nav } from './nav.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const G = window.G = { input, time: 0, paused: false, defaultSun: 3.0, camMode: 0 };
+
+// settings that stick between visits (pause menu, Settings)
+const CAM_NAMES = ['Chase', 'Driver', 'Overhead'];
+const settings = G.settings = { arrows: true, cam: 0 };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('paradice-settings') || '{}')); } catch (e) { /* private mode */ }
+if (params.has('camMode')) settings.cam = +params.get('camMode');
+if (params.has('arrows')) settings.arrows = params.get('arrows') !== '0';
+settings.cam = [0, 1, 2].includes(settings.cam) ? settings.cam : 0;
+G.camMode = settings.cam;
+function saveSettings() { try { localStorage.setItem('paradice-settings', JSON.stringify(settings)); } catch (e) { /* private mode */ } }
+function setCamMode(m, toast) {
+  G.camMode = settings.cam = (m + 3) % 3;
+  saveSettings(); showSettings();
+  if (toast && G.hud) G.hud.toast(CAM_NAMES[G.camMode] + ' camera', 1.4);
+  if (G.active) updateCamera(0.016, true);
+}
+function showSettings() {
+  $('btnArrows').textContent = 'Road arrows: ' + (settings.arrows ? 'on' : 'off');
+  $('btnCamera').textContent = 'Camera: ' + CAM_NAMES[G.camMode];
+  if (G.nav) G.nav.enabled = settings.arrows;
+}
 
 // ---------------------------------------------------------------- renderer and scene
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: params.has('shot') });
@@ -151,6 +173,21 @@ function buildSetPieces() {
   G.dockMarker.position.set(dcx, 0, dcz);
   G.dockMarker.scale.set(0.6, 0.5, 0.6);
   scene.add(G.dockMarker);
+  // Dad's place: the middle of Cutter Lane, a small gold marker
+  const cl = W.roads.filter((r) => r.n === PLACES.dadsPlace.road).sort((a, b) => b.p.length - a.p.length)[0];
+  if (cl) {
+    const p = cl.p, n = p.length / 3;
+    let len = 0; const cum = [0];
+    for (let i = 0; i < n - 1; i++) { len += Math.hypot(p[i * 3 + 3] - p[i * 3], p[i * 3 + 4] - p[i * 3 + 1]); cum.push(len); }
+    let i = 0; while (i < n - 2 && cum[i + 1] < len / 2) i++;
+    const u = (len / 2 - cum[i]) / (cum[i + 1] - cum[i] || 1);
+    G.dadsPlace = { x: p[i * 3] + (p[i * 3 + 3] - p[i * 3]) * u, z: p[i * 3 + 1] + (p[i * 3 + 4] - p[i * 3 + 1]) * u };
+    const dm = makeMarker(0xffd34d, "Dad's place");
+    dm.position.set(G.dadsPlace.x, 0, G.dadsPlace.z);
+    dm.scale.set(0.45, 0.5, 0.45);
+    scene.add(dm);
+    G.dadsMarker = dm;
+  }
 }
 
 // ---------------------------------------------------------------- vehicles
@@ -204,7 +241,7 @@ function respawnOnRoad(v) {
 }
 
 // ---------------------------------------------------------------- cameras
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), camUp = new THREE.Vector3(1, 0, 0);
 let cine = null;
 function updateCamera(dt, snap) {
   const v = G.active;
@@ -216,14 +253,36 @@ function updateCamera(dt, snap) {
     return;
   }
   const [fx, fz] = v.fwd();
+  camera.up.set(0, 1, 0);
+  // the driver view swaps a car's body for its cockpit; every other view shows the body
+  for (const o of Object.values(G.vehicles)) if (o.cockpit) { const drv = o === v && G.camMode === 1 && !cine; o.cockpit.visible = drv; o.model.visible = !drv; }
   if (G.camMode === 1) {
-    const p = v.hood.clone(); v.body.localToWorld(p);
-    const ahead = v.hood.clone().add(new THREE.Vector3(30, -1, 0)); v.body.localToWorld(ahead);
+    // driver's seat, looking down the road
+    const seat = v.seat || v.hood;
+    v.root.updateMatrixWorld(true);
+    const p = seat.clone(); v.body.localToWorld(p);
+    const ahead = seat.clone().add(new THREE.Vector3(30, -1.2, -seat.z * 0.6)); v.body.localToWorld(ahead);
     camera.position.copy(p); camera.lookAt(ahead);
     camPos.copy(p); camLook.copy(ahead);
     return;
   }
   const big = v.kind === 'truck';
+  if (G.camMode === 2) {
+    // overhead: straight down, the way you are heading is up the screen
+    const sp = Math.abs(v.speed);
+    const h = (big ? 80 : v.kind === 'boat' ? 70 : 44) + Math.min(30, sp * 0.9);
+    const lead = Math.min(26, v.speed * 0.6) + (big ? -4 : 3);
+    const want = new THREE.Vector3(v.pos.x + fx * lead, v.y + h, v.pos.z + fz * lead);
+    if (snap) { camPos.copy(want); camUp.set(fx, 0, fz); }
+    camPos.lerp(want, 1 - Math.exp(-dt * 4));
+    camUp.lerp(new THREE.Vector3(fx, 0, fz), 1 - Math.exp(-dt * 3.5));
+    if (camUp.lengthSq() < 1e-4) camUp.set(fx, 0, fz);
+    camera.position.copy(camPos);
+    camera.up.copy(camUp).normalize();
+    camLook.set(camPos.x, v.y, camPos.z);
+    camera.lookAt(camLook);
+    return;
+  }
   const dist = big ? 24 : v.kind === 'boat' ? 13 : 7.6 + Math.min(2.5, Math.abs(v.speed) * 0.05);
   const hgt = big ? 8 : v.kind === 'boat' ? 4.6 : 3.0;
   // look back smoothly along velocity when reversing hard
@@ -359,9 +418,12 @@ async function showVehicle(i) {
   const disp = new THREE.Group();
   if (def.kind === 'truck') {
     const t = makeTractor(), tr = makeTrailer(); tr.userData.setCount(36);
-    tr.position.x = t.userData.hitch; disp.add(t, tr); disp.position.x = 5; disp.scale.setScalar(0.42);
+    tr.position.x = t.userData.hitch; disp.add(t, tr); disp.scale.setScalar(0.31);
+    // put the middle of the whole rig (bumper to tailgate) on the turntable's center
+    const rb = new THREE.Box3().setFromObject(disp);
+    disp.position.x = -(rb.min.x + rb.max.x) / 2; disp.position.z = -(rb.min.z + rb.max.z) / 2;
   } else {
-    const m = v.model.clone(true); disp.add(m);
+    const m = v.model.clone(true); m.visible = true; disp.add(m);
     if (def.kind === 'boat') { disp.position.y = 0.55; disp.scale.setScalar(0.85); }
     const pin = v.pin.clone(true); pin.position.copy(v.pin.position); pin.scale.copy(v.pin.scale); disp.add(pin);
     pin.userData.hub = pin.children[1];
@@ -439,6 +501,8 @@ $('btnResume').onclick = closeMenu;
 $('btnVehicle').onclick = () => { closeMenu(); if (G.missions.active) G.missions.end('Mission stopped', 'You changed vehicles.', false); G.hud.closeCard(); G.paused = false; G.openSelect(); };
 $('btnCredits').onclick = () => { $('credits').style.display = 'block'; };
 $('btnCreditsClose').onclick = () => { $('credits').style.display = 'none'; };
+$('btnArrows').onclick = () => { settings.arrows = !settings.arrows; saveSettings(); showSettings(); };
+$('btnCamera').onclick = () => setCamMode(G.camMode + 1);
 $('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
 function fillCredits() {
   const seen = new Set();
@@ -449,7 +513,7 @@ function fillCredits() {
 let areaT = 0, area = '';
 function updatePlay(dt) {
   const v = G.active;
-  if (input.camera) G.camMode = (G.camMode + 1) % 2;
+  if (input.camera) setCamMode(G.camMode + 1, true);
   if (input.pause) { openMenu(); return; }
   const frozen = G.paused || G.hud.cardOpen();
   const inp = frozen ? { throttle: 0, brake: 1, steer: 0, handbrake: false } : input;
@@ -496,6 +560,15 @@ function updatePlay(dt) {
   const limit = v.kind === 'boat' ? null : G.missions.limitAt(v);
   G.hud.update(dt, v, limit, area, G.missions.minimapMarkers());
   engine(Math.min(1, Math.abs(v.speed) / v.top), inp.throttle || 0, v.kind, true);
+  // tires: loud with the handbrake on at speed, a quieter chirp in any big slide
+  const spd = Math.abs(v.speed), slide = v.drift || 0;
+  const onTires = v.kind !== 'boat' && !G.sinking && !frozen;
+  screech(!onTires ? 0 : inp.handbrake && spd > 4 ? THREE.MathUtils.clamp(spd / 22 + slide / 14, 0.3, 1) : slide > 7 ? 0.25 : 0);
+  G.nav.update(dt, v, G.missions.navTarget());
+  // arrows only show ahead of the car, so say so when the route is behind it
+  G.behindT = G.nav.mesh.visible && G.nav.behind && Math.abs(v.speed) > 4 ? (G.behindT || 0) + dt : 0;
+  if (G.behindT > 2.5) { G.behindT = -6; G.hud.toast('Turn around: the road arrows are behind you', 2.5); }
+  if (G.dadsMarker) G.dadsMarker.userData.ring.rotation.z += dt;
   updateCamera(dt);
 }
 
@@ -512,6 +585,7 @@ function frame(now) {
   waterUniforms.uTime.value = G.time;
   if (G.mode === 'select') { updateSelect(dt); return; }
   if (G.mode === 'intro') { updateIntro(dt); return; }
+  if (G.mode !== 'play') screech(0);
   if (G.mode === 'menu') { if (input.pause) closeMenu(); }
   if (G.mode === 'play' && G.active) updatePlay(dt);
   if (G.radio && G.mode === 'play') { if (input.radioNext) G.radio.step(1); if (input.radioPrev) G.radio.step(-1); }
@@ -546,6 +620,8 @@ async function boot() {
     G.missions = new Missions(G);
     G.missions.setup();
     G.traffic = new Traffic(scene, world);
+    G.nav = new Nav(scene, world);
+    showSettings();
     G.radio = new Radio((m) => G.hud.toast(m, 3));
     G.radio.load();
     fillCredits();

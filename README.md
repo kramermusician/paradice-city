@@ -21,10 +21,10 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 | Gas | W or Up | Right trigger |
 | Brake, then reverse | S or Down | Left trigger |
 | Steer | A, D or Left, Right | Left stick |
-| Handbrake drift | Space | A or right bumper |
-| Chase cam or hood cam | C | Y |
+| Handbrake drift (tires screech) | Space | A or right bumper |
+| Camera: chase, driver's seat, overhead | C | Y |
 | Swap car and boat at the dock, pull a trap (hold) | E | X |
-| Pause menu (missions, change vehicle, traffic, credits) | Esc or P | Start |
+| Pause menu (missions, change vehicle, settings, credits) | Esc or P | Start |
 | Pick a vehicle on the select screen | Up, Down, Enter (or click) | D-pad, A |
 
 ## What is in it
@@ -35,12 +35,20 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 - HUD: mph, the posted speed limit (from OpenStreetMap where tagged), area name, heading-up minimap with mission markers.
 - Light ambient traffic on the main roads (toggle in the pause menu). Golf carts with drivers cross near the Harbourside course and Bay Isles.
 
+## Settings (pause menu, saved in the browser)
+
+- Road arrows on or off. During a car or truck mission, soft chevrons on the pavement lead to the next checkpoint along the real roads (`js/nav.js`: one shortest-path sweep per checkpoint, so a wrong turn re-routes at once). If the route is behind you a "Turn around" note appears. No arrows in free roam or on the boat.
+- Camera: Chase, Driver or Overhead (same as the C key). The driver view hides the car body and shows a simple cockpit with a steering wheel that turns, because the scanned and decimated models have no clean cabin. Overhead looks straight down with your heading up the screen.
+- Traffic on or off.
+
+A gold "Dad's place" marker (D on the minimap) sits at the middle of Cutter Lane.
+
 ## Missions
 
 Drive into a glowing marker to start one, or pick it in the pause menu to jump to its start.
 
 1. Sunset Run (car): from Gulf of Mexico Drive on Longboat Key, over the New Pass Bridge, around St. Armands Circle, over the Ringling Bridge crest to the Sarasota bayfront before the sun goes into the Gulf (5:30). The sun really drops as the clock runs.
-2. Check the Traps (boat): five soccer-ball buoys in Sarasota Bay north of the causeway. Slow down beside each and hold E to pull the trap; each one gives a stone crab claw count.
+2. Check the Traps (boat): five soccer-ball buoys down the bay side of Longboat Key, the first about 1.1 km south of the dock and the last in the open water off Cutter Lane (positions in `PLACES.buoys`, `js/config.js`). Slow down beside each and hold E to pull the trap; each one gives a stone crab claw count.
 3. Cranberry Delivery (car): crates on the roof from the Sarasota cold-storage warehouse on Fruitville Road to St. Armands Circle. Hard braking and crashes drain the crate meter.
 4. Cranberry Run (any car, at the warehouse): intro in a dark freezer warehouse where robot forklifts load glowing crates into a white open-top reefer trailer. Then drive the articulated truck over the Ringling Causeway, around St. Armands, over New Pass and up Gulf of Mexico Drive to the grocery loading dock behind the Shoppes of Bay Isles, and back the trailer in. Speed limits are enforced the way Kramer asked (2026-11-12): the moment you are over the posted limit a police SUV lights up behind you; stop within 10 seconds for a ticket and a restart, or keep going and helicopters with searchlights join (one more every 15 seconds) until you stop or about 60 seconds pass, then a "Busted" card. Nobody rams or shoots. Hard braking and golf carts spill crates. Finish shows "Happy birthday Kristian" in the store window. Score is crates and time. There is a 3 second grace when the limit drops so you can slow down for a new sign.
 
@@ -78,7 +86,7 @@ The two CC BY-NC-SA cars mean the public site must stay free and non-commercial,
 
 ## Files
 
-- `index.html`, `js/main.js` (loop, cameras, select screen, swaps, intro, menus), `js/world.js` (map build and spatial queries), `js/vehicles.js` (car, boat, truck physics), `js/missions.js`, `js/models.js` (procedural models), `js/hud.js`, `js/traffic.js`, `js/water.js`, `js/sky.js`, `js/effects.js`, `js/input.js`, `js/audio.js`, `js/config.js`.
+- `index.html`, `js/main.js` (loop, cameras, select screen, swaps, intro, menus), `js/world.js` (map build and spatial queries), `js/vehicles.js` (car, boat, truck physics), `js/missions.js`, `js/models.js` (procedural models), `js/hud.js`, `js/traffic.js`, `js/water.js`, `js/sky.js`, `js/effects.js`, `js/input.js`, `js/audio.js`, `js/nav.js` (road arrows), `js/config.js`. `build/test/fixes.cjs` re-checks the 2026-11-13 fix pass (trailer, cameras, arrows, traps, select screen).
 - `build/fetch_osm.py`, `build/bake_world.py`, `build/retry_buildings.sh`, `build/decimate_cars.py`.
 - `build/test/`: headless Chrome checks (needs a puppeteer install; the scripts default to the one in `../esl-3d-viz/node_modules`). `shots.sh` regenerates the screenshots, `play.cjs` drives every mission end to end, `eval.cjs` prints expressions from a loaded game.
 - `screenshots/`: select screen, Longboat Key, Ringling Bridge at sunset, boat at the buoys, freezer intro, birthday sign, truck at the dock, golf cart.

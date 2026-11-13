@@ -72,6 +72,34 @@ class Vehicle {
   emit(type, data = {}) { this.events.push({ type, ...data }); }
 }
 
+// A plain cockpit seen from the driver's eyes at the origin: dash, steering wheel, hood, windshield frame.
+// +X is forward, +Z is the passenger side; mid is how far the car's center line is from the driver.
+function makeCockpit(wid, mid, paint) {
+  const g = new THREE.Group();
+  const dark = new THREE.MeshStandardMaterial({ color: 0x17171b, roughness: 0.85 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0x2c2c33, roughness: 0.6 });
+  const body = new THREE.MeshStandardMaterial({ color: paint, roughness: 0.3, metalness: 0.75 });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  add(new THREE.BoxGeometry(0.5, 0.2, wid * 0.96), dark, 0.95, -0.5, mid);                 // dash
+  add(new THREE.BoxGeometry(0.25, 0.07, 0.36), trim, 0.85, -0.38, 0);                         // gauge hood
+  const hood = add(new THREE.BoxGeometry(1.7, 0.05, wid * 0.84), body, 2.05, -0.5, mid);     // hood
+  hood.rotation.z = -0.05;
+  add(new THREE.BoxGeometry(0.08, 0.07, wid * 0.96), dark, 0.75, 0.47, mid);                 // windshield header
+  add(new THREE.BoxGeometry(0.03, 0.055, 0.2), trim, 0.75, 0.39, mid);                        // mirror
+  for (const s of [-1, 1]) {                                                                 // A-pillars
+    const p = add(new THREE.BoxGeometry(0.045, 1.1, 0.045), dark, 0.86, 0.0, mid + s * wid * 0.48);
+    p.rotation.z = 0.5;
+  }
+  const col = new THREE.Group(); col.position.set(0.66, -0.36, 0); col.rotation.z = -0.35;    // steering column, tilted back
+  const wheel = new THREE.Group();
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.165, 0.016, 8, 28), dark); rim.rotation.y = Math.PI / 2;
+  const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.33), trim);
+  const spoke2 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.165, 0.03), trim); spoke2.position.y = -0.082;
+  wheel.add(rim, spoke, spoke2); col.add(wheel); g.add(col);
+  g.userData.wheel = wheel;
+  return g;
+}
+
 // ------------------------------------------------------------------------- car
 export class Car extends Vehicle {
   async init() {
@@ -87,6 +115,13 @@ export class Car extends Vehicle {
     this.pin.scale.setScalar(1.1);
     this.body.add(this.pin);
     this.hood = new THREE.Vector3(bb.max.x * 0.15, this.hgt * 0.82, 0);
+    // driver's eyes: left seat, a little behind the middle of the car. The scanned and decimated
+    // models have no clean cabin, so the driver view hides the body and shows this simple cockpit.
+    this.seat = new THREE.Vector3(bb.max.x - this.len * 0.52, (this.hgt - bb.min.y) * 0.8, -this.wid * 0.2);
+    this.cockpit = makeCockpit(this.wid, -this.seat.z, /black/.test(this.def.note || '') ? 0x1b1b1f : 0xb9bdc4);
+    this.cockpit.position.copy(this.seat);
+    this.cockpit.visible = false;
+    this.body.add(this.cockpit);
     this.wheelbase = this.len * 0.6;
     return this;
   }
@@ -191,6 +226,7 @@ export class Car extends Vehicle {
     this.roll += (THREE.MathUtils.clamp(-latAcc * 0.004, -0.06, 0.06) - this.roll) * Math.min(1, dt * 6);
     this.pos.y = this.y;
     this.spinPinwheel(dt);
+    if (this.cockpit) this.cockpit.userData.wheel.rotation.x = -this.steer * 4.5;
     this.sync();
   }
 }
@@ -211,6 +247,7 @@ export class Boat extends Vehicle {
     this.pin.position.set(-0.4, top - 0.02, 0.45);
     this.body.add(this.pin);
     this.hood = new THREE.Vector3(-0.6, 2.1, 0);
+    this.seat = this.hood;
     this.trim = 0;
     this.wakeT = 0;
     return this;
@@ -304,6 +341,7 @@ export class Truck extends Car {
     this.pin.scale.setScalar(1.6);
     this.body.add(this.pin);
     this.hood = new THREE.Vector3(1.0, 3.0, 0.3);
+    this.seat = new THREE.Vector3(1.52, 2.9, -0.55); // just ahead of the windshield glass, driver's side
     this.hitchX = tractor.userData.hitch;
     this.trailer = makeTrailer();
     this.trailerRoot = new THREE.Group();
@@ -332,12 +370,21 @@ export class Truck extends Car {
   }
   update(dt, inp, world) {
     const prev = [this.pos.x, this.pos.z, this.heading, this.tHeading];
+    // where the trailer axle sits before the tractor moves: the trailer pivots around it
+    const [k0x, k0z] = this.kingpin();
+    const ax = k0x - Math.cos(this.tHeading) * this.axle, az = k0z + Math.sin(this.tHeading) * this.axle;
     super.update(dt, inp, world);
-    // trailer follows the kingpin
+    // the kingpin has moved with the tractor; the trailer now points from its old axle spot to it
     const [kx, kz] = this.kingpin();
-    let ax = kx - Math.cos(this.tHeading) * this.axle, az = kz + Math.sin(this.tHeading) * this.axle;
     let th = Math.atan2(-(kz - az), kx - ax);
-    let rel = Math.atan2(Math.sin(th - this.heading), Math.cos(th - this.heading));
+    const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+    if (this.speed < -0.2) {
+      // backing up: a real trailer jackknifes fast, so swing it at under half speed and ease it
+      // back in line with the tractor. Keeps the dock doable without a trucking license.
+      th = prev[3] + wrap(th - prev[3]) * 0.45;
+      th = this.heading + wrap(th - this.heading) * Math.exp(-dt * 0.5);
+    }
+    let rel = wrap(th - this.heading);
     rel = THREE.MathUtils.clamp(rel, -1.35, 1.35);
     th = this.heading + rel;
     // trailer hitting a building stops the rig

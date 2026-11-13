@@ -59,7 +59,9 @@ export const PLACES = {
   warehouse: { xz: [7542, 2868] },              // Sarasota, on Fruitville Road a block from the bayfront
   publix: { ll: [27.3673, -82.6244] },
   golf: { ll: [27.3690, -82.6210] },
-  buoys: [[27.3395, -82.5620], [27.3445, -82.5575], [27.3470, -82.5650], [27.3405, -82.5690], [27.3500, -82.5600]],
+  // stone crab traps down the bay side of Longboat Key, from near the dock to the water off Cutter Lane
+  buoys: [{ xz: [950, 150] }, { xz: [1500, 900] }, { xz: [2050, 1550] }, { xz: [2600, 2050] }, { xz: [2950, 2480] }],
+  dadsPlace: { road: 'Cutter Lane' },
 };
 
 // The barrier-island center line in local meters (x, z), north to south, measured from the

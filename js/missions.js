@@ -45,7 +45,7 @@ export class Missions {
       { id: 'sunset', name: 'Sunset Run', need: 'car', color: 0xff8a3d, pos: this.sunStart,
         desc: 'Beat the sunset from Longboat Key over New Pass and the Ringling Bridge to the Sarasota bayfront.' },
       { id: 'traps', name: 'Check the Traps', need: 'boat', color: 0x35c3ff, pos: { x: dockB[0] + 45, z: dockB[1] + 10, heading: 0 },
-        desc: 'Take the boat out to the five soccer-ball buoys in Sarasota Bay and pull each stone crab trap.' },
+        desc: 'Take the boat down the bay side of Longboat Key to five soccer-ball buoys and pull each stone crab trap. The last one is off Cutter Lane.' },
       { id: 'delivery', name: 'Cranberry Delivery', need: 'car', color: 0xe0284a, pos: G.warehouse.front,
         desc: 'Carry cranberry crates on the roof from the Sarasota warehouse to St. Armands Circle. Easy on the brakes.' },
       { id: 'run', name: 'Cranberry Run', need: 'land', color: 0xff3355, pos: G.warehouse.side,
@@ -61,8 +61,8 @@ export class Missions {
     scene.add(this.cpMarker);
 
     // --- buoys
-    this.buoys = PLACES.buoys.map((ll) => {
-      const [x, z] = W.nearestWater(...xz(...ll));
+    this.buoys = PLACES.buoys.map((pl) => {
+      const [x, z] = W.nearestWater(...P(pl));
       const b = makeBuoy(); b.position.set(x, -0.35, z);
       b.userData.glow.visible = false;
       scene.add(b);
@@ -134,6 +134,7 @@ export class Missions {
     if (!this.active) {
       for (const d of this.defs) out.push({ x: d.pos.x, z: d.pos.z, color: '#' + d.color.toString(16).padStart(6, '0'), big: true, letter: d.name[0] });
       const dc = P(PLACES.dockCar); out.push({ x: dc[0], z: dc[1], color: '#ffffff', letter: 'B' });
+      if (this.G.dadsPlace) out.push({ x: this.G.dadsPlace.x, z: this.G.dadsPlace.z, color: '#ffd34d', letter: 'D' });
     } else {
       const a = this.active;
       if (a.cp) out.push({ x: a.cp.x, z: a.cp.z, color: '#ffe04d', big: true });
@@ -141,6 +142,11 @@ export class Missions {
       if (a.id === 'run' && a.cp) for (const c of this.carts) out.push({ x: c.m.position.x, z: c.m.position.z, color: '#9fd3a8' });
     }
     return out;
+  }
+  // where the road arrows should lead right now (null: no arrows)
+  navTarget() {
+    const a = this.active;
+    return a && !a.done && a.cp ? a.cp : null;
   }
   showStartMarkers(on) { for (const d of this.defs) d.marker.visible = on; }
   setCp(cp) {
@@ -188,7 +194,7 @@ export class Missions {
       for (const b of this.buoys) { b.pulled = false; b.t = 0; b.m.userData.glow.visible = true; b.cage.visible = false; }
       a.claws = 0; a.count = 0;
       this.setCp(null);
-      G.hud.toast('Five soccer-ball buoys in Sarasota Bay, near the causeway. Pull every trap.', 4);
+      G.hud.toast('Five soccer-ball buoys down the bay side of Longboat Key. The last one is off Cutter Lane. Pull every trap.', 4.5);
       chime('good');
     } else if (id === 'delivery') {
       a.meter = 100;
@@ -254,7 +260,11 @@ export class Missions {
       if (G.active.kind === 'boat' || G.active.kind === 'truck') G.backToCar();
       const r = G.world.nearestRoadPoint(d.pos.x, d.pos.z, { ground: true });
       const back = 18;
-      G.active.place(r.x - Math.cos(r.heading) * back, r.z + Math.sin(r.heading) * back, r.heading, 0);
+      // face the way the mission goes
+      const to = id === 'sunset' ? this.sunsetCps[0] : id === 'delivery' ? this.circle : null;
+      let h = r.heading;
+      if (to && Math.cos(h) * (to.x - r.x) - Math.sin(h) * (to.z - r.z) < 0) h += Math.PI;
+      G.active.place(r.x - Math.cos(h) * back, r.z + Math.sin(h) * back, h, 0);
     }
     this.cooldown = 0;
   }

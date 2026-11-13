@@ -76,3 +76,31 @@ export function splashSound() {
   const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1200;
   s.connect(f); f.connect(master); s.start();
 }
+
+// Tire screech: filtered noise through two narrow bands so it squeals instead of hissing.
+let tire = null;
+export function screech(level) {
+  if (!ctx) return;
+  if (level > 0 && !tire) {
+    const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 1500; f1.Q.value = 22;
+    const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 2250; f2.Q.value = 28;
+    const g2 = ctx.createGain(); g2.gain.value = 0.6;
+    const wob = ctx.createOscillator(); wob.frequency.value = 6.5;
+    const wg = ctx.createGain(); wg.gain.value = 70;
+    wob.connect(wg); wg.connect(f1.frequency); wg.connect(f2.frequency);
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(f1); src.connect(f2); f1.connect(g); f2.connect(g2); g2.connect(g); g.connect(master);
+    src.start(); wob.start();
+    tire = { f1, f2, g };
+  }
+  if (!tire) return;
+  const t = ctx.currentTime;
+  tire.g.gain.setTargetAtTime(level > 0 ? 0.9 + level * 1.3 : 0, t, level > 0 ? 0.04 : 0.09);
+  if (level > 0) {
+    tire.f1.frequency.setTargetAtTime(1350 + level * 420, t, 0.1);
+    tire.f2.frequency.setTargetAtTime(2050 + level * 600, t, 0.1);
+  }
+}
