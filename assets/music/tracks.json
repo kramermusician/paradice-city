@@ -1,0 +1,15 @@
+{
+  "note": "Kramer's own recordings for Longboat Key: Paradise City. Drop each as NN.mp3 beside this file. Slots 06 to 10 are still open.",
+  "tracks": [
+    {"slot": 1, "file": "01.mp3", "title": "Paradise City", "original": "Guns N' Roses"},
+    {"slot": 2, "file": "02.mp3", "title": "(Sittin' On) The Dock of the Bay", "original": "Otis Redding"},
+    {"slot": 3, "file": "03.mp3", "title": "Seven Nation Army", "original": "The White Stripes"},
+    {"slot": 4, "file": "04.mp3", "title": "Behind Blue Eyes", "original": "The Who"},
+    {"slot": 5, "file": "05.mp3", "title": "Bastille Day", "original": "Rush"},
+    {"slot": 6, "file": "06.mp3", "title": "", "original": ""},
+    {"slot": 7, "file": "07.mp3", "title": "", "original": ""},
+    {"slot": 8, "file": "08.mp3", "title": "", "original": ""},
+    {"slot": 9, "file": "09.mp3", "title": "", "original": ""},
+    {"slot": 10, "file": "10.mp3", "title": "", "original": ""}
+  ]
+}

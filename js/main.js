@@ -1,0 +1,609 @@
+// Longboat Cruise: main loop, cameras, vehicle select, swaps, intro and menus.
+import * as THREE from 'three';
+import { makeSky } from './sky.js';
+import { VEHICLES, CREDITS, PLACES, xz, MPH } from './config.js';
+import { World } from './world.js';
+import { waterUniforms } from './water.js';
+import { createVehicle } from './vehicles.js';
+import { HUD } from './hud.js';
+import { Missions } from './missions.js';
+import { Traffic } from './traffic.js';
+import { Particles } from './effects.js';
+import { input } from './input.js';
+import { Radio } from './radio.js';
+import { initAudio, engine, splashSound, chime } from './audio.js';
+import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
+
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const G = window.G = { input, time: 0, paused: false, defaultSun: 3.0, camMode: 0 };
+
+// ---------------------------------------------------------------- renderer and scene
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: params.has('shot') });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+G.renderer = renderer;
+
+const scene = new THREE.Scene();
+G.scene = scene;
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.4, 20000);
+scene.add(camera);
+const fogColor = new THREE.Color(0xd99a7c);
+scene.fog = new THREE.Fog(fogColor, 450, 4200);
+
+const sky = makeSky(9000);
+scene.add(sky);
+const sun = new THREE.DirectionalLight(0xffc28a, 3.0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 900 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6;
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xffd6c0, 0x50604a, 1.25);
+scene.add(hemi);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envSky = makeSky(500);
+const envScene = new THREE.Scene(); envScene.add(envSky);
+let envRT = null, envEl = 99;
+const sunDir = new THREE.Vector3();
+
+G.setSun = (el) => {
+  G.sunEl = el;
+  const az = THREE.MathUtils.degToRad(245), e = THREE.MathUtils.degToRad(el);
+  sunDir.set(Math.sin(az) * Math.cos(e), Math.sin(e), -Math.cos(az) * Math.cos(e));
+  const k = THREE.MathUtils.clamp((el + 1) / 7, 0, 1);
+  for (const s of [sky, envSky]) {
+    const u = s.material.uniforms;
+    u.uSun.value.copy(sunDir);
+    u.uHorizon.value.setRGB(1.0, 0.42 + 0.14 * k, 0.24 + 0.08 * k);
+    u.uMid.value.setRGB(0.45 + 0.1 * k, 0.26 + 0.08 * k, 0.42 + 0.06 * k);
+    u.uBright.value = 0.6 + 0.3 * k;
+  }
+  sun.intensity = 0.6 + 2.6 * k;
+  sun.color.setRGB(1.0, 0.55 + 0.25 * k, 0.32 + 0.22 * k);
+  hemi.intensity = 0.55 + 0.75 * k;
+  fogColor.setRGB(0.62 + 0.18 * k, 0.4 + 0.12 * k, 0.42 + 0.06 * k);
+  scene.fog.color.copy(fogColor);
+  waterUniforms.uFogColor.value.copy(fogColor);
+  waterUniforms.uSunDir.value.copy(sunDir);
+  waterUniforms.uSkyColor.value.setRGB(0.95, 0.5 + 0.15 * k, 0.42 + 0.1 * k);
+  waterUniforms.uSunColor.value.setRGB(1.0, 0.45 + 0.25 * k, 0.2 + 0.15 * k);
+  if (Math.abs(el - envEl) > 1.2) {
+    envEl = el;
+    if (envRT) envRT.dispose();
+    envRT = pmrem.fromScene(envScene);
+    scene.environment = envRT.texture;
+    G.envTex = envRT.texture;
+    if (G.selScene) G.selScene.environment = envRT.texture;
+    scene.environmentIntensity = 0.9;
+  }
+};
+G.setSun(G.defaultSun);
+
+// particles
+G.fx = {
+  wake: new Particles(scene, 4000),
+  spray: new Particles(scene, 2500),
+  splash: new Particles(scene, 800),
+  confetti: new Particles(scene, 800),
+};
+
+// ---------------------------------------------------------------- loading
+const world = new World();
+G.world = world;
+const setLoad = (msg) => { $('loadmsg').textContent = msg; };
+
+function placeStoreAndWarehouse(W) {
+  // grocery store on the real footprint at the Shoppes of Bay Isles; front faces east to the lot
+  const [px, pz] = xz(...PLACES.publix.ll);
+  const sc = { cx: -431, cz: -286 };
+  if (Math.hypot(sc.cx - px, sc.cz - pz) > 120) { sc.cx = px; sc.cz = pz; }
+  G.store = { cx: sc.cx, cz: sc.cz, w: 68, d: 58, ang: Math.PI / 2 };
+  // cold-storage warehouse on Fruitville Road, a block from the Sarasota bayfront, facing the road
+  const [wx, wz] = PLACES.warehouse.xz;
+  const cx = wx, cz = wz;
+  G.warehouse = { cx, cz, ang: 0 };
+  W.exclusions.push([G.store.cx, G.store.cz, 48], [cx, cz, 40]);
+}
+
+function buildSetPieces() {
+  const W = world;
+  // store
+  const st = G.store;
+  const g = makeStore(st.w, st.d);
+  g.position.set(st.cx, 0, st.cz); g.rotation.y = st.ang;
+  scene.add(g); g.updateMatrixWorld(true);
+  st.group = g;
+  const dl = g.userData.dockLocal.clone(); g.localToWorld(dl);
+  const n = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), st.ang);
+  st.dock = { x: dl.x, z: dl.z, heading: Math.atan2(-n.z, n.x) };
+  const fr = new THREE.Vector3(0, 0, st.d / 2 + 32); g.localToWorld(fr);
+  const look = new THREE.Vector3(st.w * 0.12, 3, st.d / 2); g.localToWorld(look);
+  st.front = { x: fr.x, y: 5, z: fr.z, look };
+  W.bList[W.addCollider(rectPoly(st.cx, st.cz, st.w, st.d, st.ang), 9)].custom = true;
+  // warehouse
+  const wh = G.warehouse;
+  const { cx, cz } = wh;
+  const wg = makeWarehouse(60, 34);
+  wg.position.set(wh.cx, 0, wh.cz); wg.rotation.y = wh.ang;
+  scene.add(wg);
+  W.bList[W.addCollider(rectPoly(wh.cx, wh.cz, 60, 34, wh.ang), 10)].custom = true;
+  const snap = (x, z) => W.nearestRoadPoint(x, z, { name: 'Fruitville Road', ground: true });
+  const f1 = snap(cx + 52, cz + 34), f2 = snap(cx - 48, cz + 34), ts = snap(cx + 30, cz + 34);
+  wh.front = { x: f1.x, z: f1.z };
+  wh.side = { x: f2.x, z: f2.z };
+  // the westbound side of Fruitville Road, pointed toward the bayfront and the causeway
+  wh.truckSpot = { x: ts.x, z: ts.z, heading: Math.cos(ts.heading) < 0 ? ts.heading : ts.heading + Math.PI };
+  // boat dock
+  const [dcx, dcz] = PLACES.dockCar.xz, [dbx, dbz] = PLACES.dockBoat.xz;
+  const dock = makeDock(Math.hypot(dbx - dcx, dbz - dcz) - 2);
+  dock.position.set(dcx + 6, 0, dcz + 3.5); dock.rotation.y = Math.atan2(-(dbz - dcz), dbx - dcx);
+  scene.add(dock);
+  G.dockCar = { x: dcx, z: dcz };
+  G.dockBoat = { x: dbx, z: dbz };
+  G.dockMarker = makeMarker(0xffffff, "Dad's boat");
+  G.dockMarker.position.set(dcx, 0, dcz);
+  G.dockMarker.scale.set(0.6, 0.5, 0.6);
+  scene.add(G.dockMarker);
+}
+
+// ---------------------------------------------------------------- vehicles
+G.vehicles = {};
+async function getVehicle(id) {
+  if (!G.vehicles[id]) G.vehicles[id] = await createVehicle(VEHICLES.find((v) => v.id === id));
+  return G.vehicles[id];
+}
+function setActive(v) {
+  G.active = v;
+  if (!v.root.parent) scene.add(v.root);
+  if (v.trailerRoot && !v.trailerRoot.parent) scene.add(v.trailerRoot);
+  G.hud && G.hud.hint('');
+}
+G.goBoat = async (x, z, h) => {
+  const b = await getVehicle('boat');
+  if (G.active && G.active !== b && G.active.kind === 'car') { G.active.vel.set(0, 0); G.active.speed = 0; }
+  if (x === undefined) { x = G.dockBoat.x; z = G.dockBoat.z; h = 0; }
+  b.place(x, z, h, -0.35);
+  setActive(b);
+};
+G.backToCar = () => {
+  const c = G.car;
+  if (G.active && G.active.kind === 'truck') G.leaveTruck(true);
+  if (G.active && G.active.kind === 'boat') { G.active.place(G.dockBoat.x, G.dockBoat.z, 0, -0.35); }
+  const r = world.nearestRoadPoint(G.dockCar.x, G.dockCar.z, { ground: true });
+  if (G.active && G.active.kind === 'boat') c.place(r.x, r.z, r.heading, 0);
+  setActive(c);
+};
+G.useTruck = async () => {
+  const t = await getVehicle('semi');
+  if (G.active && G.active.kind === 'car') G.parked = { v: G.active, x: G.active.pos.x, z: G.active.pos.z, h: G.active.heading };
+  setActive(t);
+  return t;
+};
+G.leaveTruck = (silent) => {
+  const t = G.vehicles.semi;
+  if (!t) return;
+  t.root.removeFromParent(); t.trailerRoot.removeFromParent(); t.clearFlying();
+  const c = G.car;
+  const r = world.nearestRoadPoint(t.pos.x, t.pos.z, { ground: true });
+  c.place(r.x + Math.cos(r.heading) * 8, r.z - Math.sin(r.heading) * 8, r.heading, 0);
+  setActive(c);
+};
+
+function respawnOnRoad(v) {
+  const p = G.lastGood || { x: v.pos.x, z: v.pos.z };
+  const r = world.nearestRoadPoint(p.x, p.z, { ground: true });
+  v.place(r.x, r.z, r.heading, r.y);
+  if (v.trailerRoot) v.place(r.x, r.z, r.heading, r.y);
+}
+
+// ---------------------------------------------------------------- cameras
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+let cine = null;
+function updateCamera(dt, snap) {
+  const v = G.active;
+  if (params.has('cam')) { const c = params.get('cam').split(',').map(Number); camera.position.set(v.pos.x + c[0], v.y + c[1], v.pos.z + c[2]); camera.lookAt(v.pos.x, v.y, v.pos.z); return; }
+  if (cine) {
+    camera.position.lerp(cine.pos, Math.min(1, dt * 1.5));
+    camLook.lerp(cine.look, Math.min(1, dt * 2));
+    camera.lookAt(camLook);
+    return;
+  }
+  const [fx, fz] = v.fwd();
+  if (G.camMode === 1) {
+    const p = v.hood.clone(); v.body.localToWorld(p);
+    const ahead = v.hood.clone().add(new THREE.Vector3(30, -1, 0)); v.body.localToWorld(ahead);
+    camera.position.copy(p); camera.lookAt(ahead);
+    camPos.copy(p); camLook.copy(ahead);
+    return;
+  }
+  const big = v.kind === 'truck';
+  const dist = big ? 24 : v.kind === 'boat' ? 13 : 7.6 + Math.min(2.5, Math.abs(v.speed) * 0.05);
+  const hgt = big ? 8 : v.kind === 'boat' ? 4.6 : 3.0;
+  // look back smoothly along velocity when reversing hard
+  let hx = fx, hz = fz;
+  if (v.speed < -3) { hx = -fx; hz = -fz; }
+  const want = new THREE.Vector3(v.pos.x - hx * dist, v.y + hgt, v.pos.z - hz * dist);
+  const r = world.roadAt(want.x, want.z, v.y);
+  want.y = Math.max(want.y, (r ? r.y : 0) + 1.2);
+  const look = new THREE.Vector3(v.pos.x + fx * 4, v.y + (big ? 3 : 1.3), v.pos.z + fz * 4);
+  if (snap) { camPos.copy(want); camLook.copy(look); }
+  camPos.lerp(want, 1 - Math.exp(-dt * (big ? 3 : 5)));
+  camLook.lerp(look, 1 - Math.exp(-dt * 10));
+  camera.position.copy(camPos);
+  if (G.shake > 0) { camera.position.x += (Math.random() - 0.5) * G.shake; camera.position.y += (Math.random() - 0.5) * G.shake; G.shake *= Math.exp(-dt * 6); }
+  camera.lookAt(camLook);
+}
+G.celebrate = (front, cb) => {
+  cine = { pos: new THREE.Vector3(front.x, front.y, front.z), look: front.look.clone() };
+  for (let i = 0; i < 300; i++) {
+    const c = [[1, 0.2, 0.3], [1, 0.85, 0.2], [0.2, 0.8, 0.6], [0.3, 0.5, 1]][i % 4];
+    G.fx.confetti.emit(front.look.x + (Math.random() - 0.5) * 14, 9 + Math.random() * 3, front.look.z + (Math.random() - 0.5) * 6,
+      (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4, { life: 5, s0: 0.25, s1: 0.25, grav: 1.5, alpha: 1, color: c });
+  }
+  setTimeout(() => { cb(); }, 5500);
+  G.onCardClose = () => { cine = null; };
+};
+
+// ---------------------------------------------------------------- intro: the freezer warehouse
+let intro = null;
+G.startIntro = (done) => {
+  if (!intro) {
+    const s = new THREE.Scene();
+    s.background = new THREE.Color(0x05080d);
+    s.fog = new THREE.Fog(0x0a1220, 15, 70);
+    s.add(makeFreezerSet());
+    const trailer = makeTrailer();
+    trailer.position.set(0, 0, 26); trailer.rotation.y = -Math.PI / 2;
+    const tractor = makeTractor();
+    tractor.position.set(0, 0, 28.5); tractor.rotation.y = -Math.PI / 2;
+    s.add(trailer, tractor);
+    const lifts = [makeForklift(), makeForklift(), makeForklift()];
+    lifts.forEach((f) => s.add(f));
+    const glow = new THREE.PointLight(0xff2040, 40, 18, 1.5); glow.position.set(0, 3, 13); s.add(glow);
+    const cam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 200);
+    intro = { s, trailer, lifts, cam };
+  }
+  intro.t = 0; intro.done = done; intro.loaded = 4;
+  intro.trailer.userData.setCount(4);
+  G.mode = 'intro';
+  $('introText').style.display = 'block';
+  $('hud').style.display = 'none';
+  $('toast').classList.remove('show'); G.hud.toastT = 0;
+  G.hud.mission(''); G.hud.hint('');
+};
+function updateIntro(dt) {
+  const I = intro;
+  I.t += dt;
+  const T = 13;
+  I.lifts.forEach((f, i) => {
+    const ph = ((I.t * 0.32 + i / 3) % 1);
+    const sx = -10 + i * 4.5, start = new THREE.Vector3(sx, 0, -8), end = new THREE.Vector3((i - 1) * 0.8, 0, 9.4);
+    let p, carrying;
+    if (ph < 0.45) { p = start.clone().lerp(end, ph / 0.45); carrying = true; }
+    else if (ph < 0.55) { p = end.clone(); carrying = ph < 0.5; }
+    else { p = end.clone().lerp(start, (ph - 0.55) / 0.45); carrying = false; }
+    const dir = ph < 0.5 ? end.clone().sub(start) : start.clone().sub(end);
+    f.position.copy(p);
+    f.rotation.y = Math.atan2(-dir.z, dir.x) + (ph >= 0.55 ? Math.PI : 0);
+    f.userData.forks.position.y = carrying ? 0.6 + Math.sin(I.t * 3 + i) * 0.05 : 0.1;
+    f.userData.crate.visible = carrying;
+    const key = 'c' + i;
+    if (ph > 0.5 && !I[key]) { I[key] = true; I.loaded = Math.min(36, I.loaded + 3); I.trailer.userData.setCount(I.loaded); }
+    if (ph < 0.5) I[key] = false;
+  });
+  const k = I.t / T;
+  I.cam.position.set(-12 + k * 6, 2.6 + k * 3.5, -17 + k * 13);
+  I.cam.lookAt(-2 + k * 2, 1.4, 8 + k * 3);
+  renderer.render(I.s, I.cam);
+  if (I.t > T || (I.t > 0.6 && (input.any || input.throttle || input.confirm))) {
+    $('introText').style.display = 'none';
+    $('hud').style.display = 'block';
+    G.mode = 'play';
+    const cb = I.done; I.done = null;
+    cb && cb().then?.(() => updateCamera(0.016, true));
+    setTimeout(() => updateCamera(0.016, true), 50);
+  }
+}
+
+// ---------------------------------------------------------------- select screen
+const sel = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200), idx: 0, holder: new THREE.Group(), token: 0 };
+{
+  const s = sel.scene;
+  G.selScene = s; s.environment = G.envTex;
+  const bg = document.createElement('canvas'); bg.width = 4; bg.height = 256;
+  const c = bg.getContext('2d'); const gr = c.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#2b2f5a'); gr.addColorStop(0.55, '#e0806a'); gr.addColorStop(0.75, '#ffb46e'); gr.addColorStop(1, '#3a2a35');
+  c.fillStyle = gr; c.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(bg); t.colorSpace = THREE.SRGBColorSpace; s.background = t;
+  const plat = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.4, 0.25, 48), new THREE.MeshStandardMaterial({ color: 0x2a2c33, roughness: 0.3, metalness: 0.5 }));
+  plat.position.y = -0.125; plat.receiveShadow = true; s.add(plat);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(4.25, 0.04, 6, 64), new THREE.MeshBasicMaterial({ color: 0xffb46e }));
+  ring.rotation.x = Math.PI / 2; s.add(ring);
+  const key = new THREE.DirectionalLight(0xffd2a8, 3); key.position.set(-6, 5, 4); s.add(key);
+  const rim = new THREE.DirectionalLight(0x9ab0ff, 1.5); rim.position.set(5, 3, -6); s.add(rim);
+  s.add(new THREE.HemisphereLight(0xffe0d0, 0x302830, 1.0));
+  s.add(sel.holder);
+  sel.cam.position.set(0, 2.2, 9.5); sel.cam.lookAt(0, 0.6, 0);
+}
+function buildSelectList() {
+  const list = $('vlist');
+  list.innerHTML = '';
+  VEHICLES.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `<span class="vn">${v.name}</span><span class="vy">${v.year}</span>`;
+    b.onclick = () => { initAudio(); showVehicle(i); };
+    b.ondblclick = () => startDrive();
+    list.appendChild(b);
+  });
+}
+async function showVehicle(i) {
+  sel.idx = (i + VEHICLES.length) % VEHICLES.length;
+  [...$('vlist').children].forEach((b, k) => b.classList.toggle('on', k === sel.idx));
+  const def = VEHICLES[sel.idx];
+  $('vname').textContent = def.name;
+  $('vyear').textContent = def.year + (def.note ? ' . ' + def.note : '');
+  $('vcredit').textContent = CREDITS[def.credit] || '';
+  const tok = ++sel.token;
+  $('vload').style.display = 'block';
+  const v = await getVehicle(def.id);
+  if (tok !== sel.token) return;
+  $('vload').style.display = 'none';
+  sel.holder.clear();
+  const disp = new THREE.Group();
+  if (def.kind === 'truck') {
+    const t = makeTractor(), tr = makeTrailer(); tr.userData.setCount(36);
+    tr.position.x = t.userData.hitch; disp.add(t, tr); disp.position.x = 5; disp.scale.setScalar(0.42);
+  } else {
+    const m = v.model.clone(true); disp.add(m);
+    if (def.kind === 'boat') { disp.position.y = 0.55; disp.scale.setScalar(0.85); }
+    const pin = v.pin.clone(true); pin.position.copy(v.pin.position); pin.scale.copy(v.pin.scale); disp.add(pin);
+    pin.userData.hub = pin.children[1];
+  }
+  sel.holder.add(disp);
+  sel.disp = disp;
+}
+function updateSelect(dt) {
+  sel.holder.rotation.y += dt * 0.45;
+  if (sel.disp && sel.disp.children) sel.disp.traverse((o) => { if (o.userData.hub && o.userData.hub.isObject3D) o.userData.hub.rotation.x += dt * 4; });
+  if (input.up) showVehicle(sel.idx - 1);
+  if (input.down) showVehicle(sel.idx + 1);
+  if (input.confirm) startDrive();
+  renderer.render(sel.scene, sel.cam);
+}
+async function startDrive() {
+  initAudio();
+  if (G.radio) G.radio.start();
+  const def = VEHICLES[sel.idx];
+  $('select').style.display = 'none';
+  $('hud').style.display = 'block';
+  G.mode = 'play';
+  if (G.active && G.active.kind === 'truck') G.leaveTruck(true);
+  const carDef = def.kind === 'car' ? def : (G.car ? G.car.def : VEHICLES[0]);
+  const car = await getVehicle(carDef.id);
+  if (G.car && G.car !== car) G.car.root.removeFromParent();
+  G.car = car;
+  const boat = await getVehicle('boat');
+  scene.add(boat.root);
+  if (!G.started) boat.place(G.dockBoat.x, G.dockBoat.z, 0, -0.35);
+  if (def.kind === 'boat') {
+    const r = world.nearestRoadPoint(G.dockCar.x, G.dockCar.z, { ground: true });
+    car.place(r.x, r.z, r.heading, 0); scene.add(car.root);
+    await G.goBoat(G.dockBoat.x + 12, G.dockBoat.z, 0);
+  } else if (def.kind === 'truck') {
+    const t = await G.useTruck();
+    const s = G.warehouse.truckSpot;
+    t.place(s.x, s.z, s.heading, 0);
+    car.place(s.x, s.z + 6, s.heading, 0); car.root.removeFromParent();
+  } else {
+    if (!G.started || params.has('spawn')) {
+      const sp = world.nearestRoadPoint(...xz(...PLACES.spawn.ll), { name: 'Gulf of Mexico Drive', ground: true });
+      const h0 = Math.cos(sp.heading) > 0 ? sp.heading + Math.PI : sp.heading; // facing up the key, toward the sunset
+      car.place(sp.x, sp.z, h0, 0);
+    } else if (G.active) car.place(G.active.pos.x, G.active.pos.z, G.active.heading, G.active.kind === 'boat' ? 0 : G.active.y);
+    setActive(car);
+  }
+  G.started = true;
+  updateCamera(0.016, true);
+}
+G.openSelect = () => {
+  G.mode = 'select';
+  $('select').style.display = 'flex';
+  $('hud').style.display = 'none';
+  $('menu').style.display = 'none';
+  showVehicle(sel.idx);
+};
+
+// ---------------------------------------------------------------- pause menu
+function openMenu() {
+  G.mode = 'menu';
+  const m = $('menu');
+  m.style.display = 'flex';
+  const ms = $('menuMissions');
+  ms.innerHTML = '';
+  for (const d of G.missions.defs) {
+    const b = document.createElement('button');
+    b.innerHTML = `<b>${d.name}</b><br><small>${d.desc}</small>`;
+    b.onclick = () => { closeMenu(); if (G.missions.active) G.missions.end('Mission stopped', 'You left the mission.', false); G.missions.teleportTo(d.id); updateCamera(0.016, true); };
+    ms.appendChild(b);
+  }
+}
+function closeMenu() { $('menu').style.display = 'none'; G.mode = 'play'; }
+$('btnResume').onclick = closeMenu;
+$('btnVehicle').onclick = () => { closeMenu(); if (G.missions.active) G.missions.end('Mission stopped', 'You changed vehicles.', false); G.hud.closeCard(); G.paused = false; G.openSelect(); };
+$('btnCredits').onclick = () => { $('credits').style.display = 'block'; };
+$('btnCreditsClose').onclick = () => { $('credits').style.display = 'none'; };
+$('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
+function fillCredits() {
+  const seen = new Set();
+  $('creditList').innerHTML = VEHICLES.filter((v) => !seen.has(v.credit) && seen.add(v.credit)).map((v) => `<li><b>${v.name}</b>: ${CREDITS[v.credit]}</li>`).join('');
+}
+
+// ---------------------------------------------------------------- play loop
+let areaT = 0, area = '';
+function updatePlay(dt) {
+  const v = G.active;
+  if (input.camera) G.camMode = (G.camMode + 1) % 2;
+  if (input.pause) { openMenu(); return; }
+  const frozen = G.paused || G.hud.cardOpen();
+  const inp = frozen ? { throttle: 0, brake: 1, steer: 0, handbrake: false } : input;
+  v.events.length = 0;
+  v.update(dt, inp, world, G.fx);
+  // the parked boat keeps bobbing at the dock
+  const boat = G.vehicles.boat;
+  if (boat && boat !== v) boat.update(dt, { throttle: 0, brake: 0, steer: 0 }, world, null);
+  if (v.kind !== 'boat') {
+    const hit = G.traffic.collide(v);
+    if (hit > 3) v.events.push({ type: 'crash', impact: hit });
+  }
+  for (const e of v.events) {
+    if (e.type === 'crash') { G.shake = Math.min(0.6, e.impact * 0.03); }
+    if (e.type === 'water' && !G.sinking) {
+      G.sinking = 1.4;
+      splashSound();
+      for (let i = 0; i < 160; i++) G.fx.splash.emit(v.pos.x + (Math.random() - 0.5) * 3, -0.2, v.pos.z + (Math.random() - 0.5) * 3, v.vel.x * 0.2 + (Math.random() - 0.5) * 6, 4 + Math.random() * 7, v.vel.y * 0.2 + (Math.random() - 0.5) * 6, { life: 1.4, s0: 0.4, s1: 1.2, grav: 9.8, alpha: 0.9 });
+      G.hud.toast('Splash! Back to the nearest road.', 2);
+    }
+  }
+  if (G.sinking) {
+    G.sinking -= dt;
+    v.y -= dt * 1.2; v.vel.multiplyScalar(Math.exp(-dt * 3)); v.sync();
+    if (G.sinking <= 0) { G.sinking = 0; respawnOnRoad(v); updateCamera(dt, true); }
+  } else if (v.kind !== 'boat' && v.lastRoad && v.y < 0.5) {
+    G.lastGoodT = (G.lastGoodT || 0) + dt;
+    if (G.lastGoodT > 1) { G.lastGoodT = 0; G.lastGood = { x: v.pos.x, z: v.pos.z }; }
+  }
+  // swaps at the dock
+  if (!G.missions.active || G.missions.active.id === 'traps') {
+    if (v.kind === 'car' && Math.hypot(v.pos.x - G.dockCar.x, v.pos.z - G.dockCar.z) < 10) {
+      G.hud.hint("Press E to take Dad's boat");
+      if (input.interact) { G.goBoat(G.dockBoat.x + 6, G.dockBoat.z, 0); chime('good'); updateCamera(dt, true); }
+    } else if (v.kind === 'boat' && Math.hypot(v.pos.x - G.dockBoat.x, v.pos.z - G.dockBoat.z) < 20) {
+      G.hud.hint('Press E to tie up and drive the car');
+      if (input.interact) { G.backToCar(); chime('good'); updateCamera(dt, true); }
+    } else if (!G.missions.active) G.hud.hint('');
+  }
+  G.missions.update(dt);
+  G.traffic.update(dt, v);
+  areaT -= dt;
+  if (areaT <= 0) { areaT = 0.5; area = world.areaName(v.pos.x, v.pos.z, v.lastRoad); }
+  const limit = v.kind === 'boat' ? null : G.missions.limitAt(v);
+  G.hud.update(dt, v, limit, area, G.missions.minimapMarkers());
+  engine(Math.min(1, Math.abs(v.speed) / v.top), inp.throttle || 0, v.kind, true);
+  updateCamera(dt);
+}
+
+let last = performance.now();
+let fpsAcc = 0, fpsN = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc > 1) { G.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
+  G.time += dt;
+  input.update();
+  waterUniforms.uTime.value = G.time;
+  if (G.mode === 'select') { updateSelect(dt); return; }
+  if (G.mode === 'intro') { updateIntro(dt); return; }
+  if (G.mode === 'menu') { if (input.pause) closeMenu(); }
+  if (G.mode === 'play' && G.active) updatePlay(dt);
+  if (G.radio && G.mode === 'play') { if (input.radioNext) G.radio.step(1); if (input.radioPrev) G.radio.step(-1); }
+  if (G.hud && G.hud.cardOpen() && input.confirm && G.hud.cardButtons) { const [, fn] = G.hud.cardButtons[0]; G.hud.closeCard(); G.onCardClose && G.onCardClose(); G.onCardClose = null; fn(); }
+  if (!G.active) return;
+  for (const p of Object.values(G.fx)) { p.update(dt); p.setScale(innerHeight); }
+  const ap = G.active.pos;
+  sun.position.set(ap.x + sunDir.x * 300, Math.max(40, sunDir.y * 300 + 60), ap.z + sunDir.z * 300);
+  sun.target.position.set(ap.x, 0, ap.z);
+  sky.position.copy(camera.position);
+  world.update(camera.position);
+  G.dockMarker.userData.ring.rotation.z += dt;
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  for (const c of [camera, sel.cam]) { c.aspect = innerWidth / innerHeight; c.updateProjectionMatrix(); }
+  if (intro) { intro.cam.aspect = innerWidth / innerHeight; intro.cam.updateProjectionMatrix(); }
+});
+document.addEventListener('click', (e) => { if (e.target.closest('#card button')) { G.onCardClose && G.onCardClose(); G.onCardClose = null; } });
+
+// ---------------------------------------------------------------- boot
+document.addEventListener('drive', () => startDrive());
+async function boot() {
+  try {
+    world.beforeBuildings = placeStoreAndWarehouse;
+    await world.load(scene, setLoad);
+    setLoad('Setting the scene');
+    buildSetPieces();
+    G.hud = new HUD(world);
+    G.missions = new Missions(G);
+    G.missions.setup();
+    G.traffic = new Traffic(scene, world);
+    G.radio = new Radio((m) => G.hud.toast(m, 3));
+    G.radio.load();
+    fillCredits();
+    buildSelectList();
+    setLoad('Polishing the silver cars');
+    await getVehicle(VEHICLES[0].id);
+    $('loading').style.display = 'none';
+    G.openSelect();
+    requestAnimationFrame(frame);
+    G.ready = true;
+    console.log(`Paradice City ready: ${world.roads.length} roads, ${world.bList.length} buildings, ${world.palmCount} palms, ${world.houseCount} houses`);
+    if (params.has('auto')) await autoShot(params.get('auto'));
+  } catch (e) {
+    console.error(e);
+    setLoad('Something went wrong: ' + e.message);
+  }
+}
+boot();
+
+// ---------------------------------------------------------------- test hooks for headless screenshots
+async function autoShot(what) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  G.wait = wait;
+  if (what === 'select') { await showVehicle(Math.max(0, VEHICLES.findIndex((v) => v.id === params.get('car')))); return; }
+  sel.idx = VEHICLES.findIndex((v) => v.id === (params.get('car') || 'porsche-911'));
+  if (what === 'boat') sel.idx = VEHICLES.findIndex((v) => v.id === 'boat');
+  await startDrive();
+  const v = G.active;
+  if (what === 'drive') {
+    v.vel.set(Math.cos(v.heading) * 22, -Math.sin(v.heading) * 22);
+  } else if (what === 'bridge') {
+    const W = world;
+    let best = null;
+    for (const r of W.roads) if (/John Ringling/.test(r.n) && r.b) for (let i = 0; i < r.p.length - 3; i += 3) if (r.p[i + 2] > 12 && (!best || r.p[i + 2] < best.y)) best = { x: r.p[i], z: r.p[i + 1], y: r.p[i + 2], h: Math.atan2(-(r.p[i + 4] - r.p[i + 1]), r.p[i + 3] - r.p[i]) };
+    // drive west toward the sunset
+    let h = best.h; if (Math.cos(h) > 0) h += Math.PI;
+    v.place(best.x, best.z, h, best.y);
+    v.vel.set(Math.cos(h) * 18, -Math.sin(h) * 18);
+  } else if (what === 'boat') {
+    const b = G.missions.buoys[1];
+    v.place(b.x - 30, b.z + 12, 0.35, -0.35);
+    v.vel.set(Math.cos(0.35) * 12, -Math.sin(0.35) * 12);
+    G.missions.begin('traps');
+  } else if (what === 'dock') {
+    const t = await G.useTruck();
+    const d = G.store.dock;
+    const fx = Math.cos(d.heading), fz = -Math.sin(d.heading);
+    const kx = d.x + fx * t.tLen, kz = d.z + fz * t.tLen;
+    t.place(kx - fx * t.hitchX, kz - fz * t.hitchX, d.heading, 0);
+    G.store.group.userData.bday.visible = true;
+    G.missions.showStartMarkers(false);
+  } else if (what === 'golf') {
+    const c = G.missions.carts[0];
+    const r = world.nearestRoadPoint(c.A.x, c.A.z, { ground: true });
+    v.place(r.x - Math.cos(r.heading) * 40, r.z + Math.sin(r.heading) * 40, r.heading, 0);
+    v.vel.set(Math.cos(r.heading) * 8, -Math.sin(r.heading) * 8);
+  } else if (what === 'intro') {
+    G.startIntro(async () => {});
+  }
+  updateCamera(0.016, true);
+}

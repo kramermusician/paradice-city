@@ -1,0 +1,11 @@
+# Public site ships the game only. Build tools, raw OSM pulls, research and planning notes stay local.
+build/
+research/
+screenshots/
+BUILD_BRIEF.md
+ROADMAP.md
+STATUS.md
+build.log
+.DS_Store
+assets/music/*.mp3
+publish.sh
