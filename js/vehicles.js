@@ -129,6 +129,25 @@ export class Car extends Vehicle {
     const c = Math.cos(h), s = Math.sin(h), hl = this.len / 2 * shrink, hw = this.wid / 2 * shrink;
     return [[hl, hw], [hl, -hw], [-hl, hw], [-hl, -hw], [hl, 0], [-hl, 0]].map(([lx, lz]) => [x + lx * c + lz * s, z - lx * s + lz * c]);
   }
+  // How far into a wall, railing or building a pose is: 0 means clear. Counted per corner so a
+  // car already wedged into a railing can still move as long as the move does not make it worse.
+  penetration(world, x, z, h) {
+    let n = 0;
+    for (const [cx, cz] of this.corners(x, z, h)) {
+      if (this.y < 3 && world.buildingAt(cx, cz)) n++;
+      if (!world.inBounds(cx, cz)) n += 100;
+    }
+    if (this.y > 1.4) {
+      const r = world.roadAt(x, z, this.y);
+      if (!r || Math.abs(r.y - this.y) > 1.6) n += 10;
+      // keep the whole body on the deck
+      for (const [cx, cz] of this.corners(x, z, h, 0.8).slice(0, 4)) {
+        const rc = world.roadAt(cx, cz, this.y);
+        if (!rc || Math.abs(rc.y - this.y) > 2.0) n++;
+      }
+    }
+    return n;
+  }
   blocked(world, x, z, h) {
     for (const [cx, cz] of this.corners(x, z, h)) {
       if (this.y < 3 && world.buildingAt(cx, cz)) return 'building';
@@ -144,6 +163,26 @@ export class Car extends Vehicle {
       }
     }
     return null;
+  }
+  // Pinned against a railing, wall or building for a moment with the player still pressing keys:
+  // slide back to the middle of the lane, squared up with the road, so the car can always drive off.
+  unwedge(world, dt) {
+    const wrap = (q) => Math.atan2(Math.sin(q), Math.cos(q));
+    let r = world.roadAt(this.pos.x, this.pos.z, this.y);
+    let tx, tz, dir;
+    if (r) { tx = r.cx; tz = r.cz; dir = r.dir; }
+    else {
+      const n = world.nearestRoadPoint(this.pos.x, this.pos.z, this.y < 1.4 ? { ground: true } : {});
+      if (!n || n.dist > 80) return;
+      tx = n.x; tz = n.z; dir = n.heading;
+    }
+    let d = wrap(dir - this.heading);
+    if (Math.abs(d) > Math.PI / 2) d = wrap(d + Math.PI);
+    const k = Math.min(1, dt * 4);
+    this.pos.x += (tx - this.pos.x) * k; this.pos.z += (tz - this.pos.z) * k;
+    this.heading += d * k;
+    this.vel.set(0, 0); this.speed = 0;
+    return Math.hypot(tx - this.pos.x, tz - this.pos.z) < 0.3 && Math.abs(d) < 0.05;
   }
   update(dt, inp, world) {
     this.t += dt;
@@ -184,7 +223,15 @@ export class Car extends Vehicle {
 
     // move with collisions
     const nx = this.pos.x + this.vel.x * dt, nz = this.pos.z + this.vel.y * dt;
-    const why = this.blocked(world, nx, nz, this.heading);
+    let why = this.blocked(world, nx, nz, this.heading);
+    if (why) {
+      // already into the wall here? then any move that does not dig in deeper is allowed,
+      // otherwise the car freezes against the railing with no way out
+      const here = this.penetration(world, this.pos.x, this.pos.z, this.heading);
+      if (here > 0) {
+        if (this.penetration(world, nx, nz, this.heading) <= here) why = null;
+      }
+    }
     if (why) {
       const impact = this.vel.length();
       if (why === 'rail') {
@@ -202,6 +249,11 @@ export class Car extends Vehicle {
     } else {
       this.pos.x = nx; this.pos.z = nz;
     }
+    // stuck detector: blocked while the player keeps trying to drive
+    const trying = inp.throttle || inp.brake;
+    if (this.rescuing > 0) { this.rescuing -= dt; if (this.unwedge(world, dt) !== false) this.rescuing = 0; }
+    else if (why && trying) { this.pinnedT = (this.pinnedT || 0) + dt; if (this.pinnedT > 1.0) { this.rescuing = 1.2; this.pinnedT = 0; } }
+    else this.pinnedT = Math.max(0, (this.pinnedT || 0) - dt * 2);
     this.afterMove(dt, world);
   }
   afterMove(dt, world) {

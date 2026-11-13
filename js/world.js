@@ -302,7 +302,7 @@ export class World {
     return DEFAULT_LIMIT[rd.k] || 25;
   }
 
-  // Road under (x, z) closest in height to yRef. Returns {y, road, hw, d} or null.
+  // Road under (x, z) closest in height to yRef. Returns {y, road, hw, d, dir, cx, cz} (cx, cz: nearest centerline point) or null.
   roadAt(x, z, yRef = 0) {
     const C = 40;
     const cell = this.segGrid.get(Math.floor(x / C) * 100000 + Math.floor(z / C));
@@ -320,7 +320,7 @@ export class World {
       const y = s[2] + (s[5] - s[2]) * u;
       if (y > yRef + 2.6) continue;
       const dy = Math.abs(y - yRef);
-      if (dy < bestDy) { bestDy = dy; best = { y, road: this.roads[s[7]], hw: s[6], d, dir: Math.atan2(-dz, dx) }; }
+      if (dy < bestDy) { bestDy = dy; best = { y, road: this.roads[s[7]], hw: s[6], d, dir: Math.atan2(-dz, dx), cx: px, cz: pz }; }
     }
     return best;
   }
