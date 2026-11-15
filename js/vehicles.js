@@ -14,7 +14,11 @@ export async function loadModel(def) {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = false;
         const mats = Array.isArray(o.material) ? o.material : [o.material];
-        for (const m of mats) if (m && m.envMapIntensity !== undefined) m.envMapIntensity = 1.0;
+        for (const m of mats) {
+          if (m && m.envMapIntensity !== undefined) m.envMapIntensity = 1.0;
+          // No reflection map (broken in some Safari builds): metal with nothing to reflect is black.
+          if (m && window.G && G.envBroken && m.metalness > 0.35) { m.metalness = 0.35; m.roughness = Math.max(m.roughness, 0.35); }
+        }
       }
     });
     return g.scene;

@@ -106,12 +106,53 @@ G.setSun = (el) => {
     envEl = el;
     if (envRT) envRT.dispose();
     envRT = pmrem.fromScene(envScene);
-    scene.environment = envRT.texture;
-    G.envTex = envRT.texture;
-    if (G.selScene) G.selScene.environment = envRT.texture;
+    if (G.envBroken === undefined) G.envBroken = params.has('noenv') || !envWorks(envRT.texture);
+    const env = G.envBroken ? null : envRT.texture;
+    scene.environment = env;
+    G.envTex = env;
+    if (G.selScene) G.selScene.environment = env;
     scene.environmentIntensity = 0.9;
   }
+  if (G.envBroken) hemi.intensity += 0.6;
 };
+
+// Fallback sweep: tone down metal on everything new in the scene (traffic, police, props).
+if (true) {
+  const seen = new WeakSet();
+  setInterval(() => {
+    if (!G.envBroken) return;
+    for (const sc of [scene, G.selScene]) if (sc) sc.traverse((o) => {
+      if (!o.isMesh) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!m || seen.has(m) || !m.isMeshStandardMaterial) continue;
+        seen.add(m);
+        if (m.metalness > 0.35) { m.metalness = 0.35; m.roughness = Math.max(m.roughness, 0.35); }
+      }
+    });
+  }, 1500);
+}
+
+// Some Safari builds (seen on an M1 iMac, 2026-11-15) produce a reflection map that turns
+// every MeshStandard/Physical material black. Probe it once: a white non-metal sphere lit
+// only by the environment, read back through an 8-bit target. Black or NaN means broken,
+// and the cars fall back to plain lights (vehicles.js tones down metalness).
+function envWorks(tex) {
+  try {
+    const rt = new THREE.WebGLRenderTarget(8, 8);
+    const s = new THREE.Scene(); s.environment = tex;
+    const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 10); cam.position.z = 3;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0, roughness: 0.6 }));
+    s.add(ball);
+    const prevTM = renderer.toneMapping; renderer.toneMapping = THREE.NoToneMapping;
+    renderer.setRenderTarget(rt); renderer.render(s, cam); renderer.setRenderTarget(null);
+    renderer.toneMapping = prevTM;
+    const px = new Uint8Array(4); renderer.readRenderTargetPixels(rt, 4, 4, 1, 1, px);
+    rt.dispose(); ball.geometry.dispose(); ball.material.dispose();
+    const ok = px[0] + px[1] + px[2] > 12;
+    console.log('env probe', Array.from(px).join(','), ok ? 'ok' : 'BROKEN, using fallback lighting');
+    return ok;
+  } catch (e) { console.warn('env probe failed', e); return true; }
+}
 G.setSun(G.defaultSun);
 
 // particles

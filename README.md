@@ -126,3 +126,7 @@ The two CC BY-NC-SA cars mean the public site must stay free and non-commercial,
 - `screenshots/`: select screen, Longboat Key, Ringling Bridge at sunset, boat at the buoys, freezer intro, birthday sign, truck at the dock, golf cart.
 
 URL flags for testing: `?auto=select|drive|bridge|boat|dock|intro|golf`, `&car=<id>`, `&cam=x,y,z` (fixed camera offset), `&shot=1` (keeps the frame buffer for screenshots).
+
+## Safari black cars (fixed 2026-11-15)
+
+On Kramer's M1 iMac, Safari built a reflection map (PMREM from the sky) that turned every MeshStandard/Physical material black, so every GLB car was black while the Lambert world looked fine. `js/main.js` now probes the map once at startup (a white sphere lit only by it, read back at 8-bit); if it reads black, the game drops the map, raises the hemisphere light, and tones metal down to 0.35 on cars, traffic and props. Force the fallback for testing with `?noenv=1`. The console logs `env probe ... ok` or `BROKEN`.
