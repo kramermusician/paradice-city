@@ -21,6 +21,7 @@ export async function loadModel(def) {
         }
       }
     });
+    if (window.G && G.fixMaterials) G.fixMaterials(g.scene);   // Safari: lambert/standard car materials (main.js)
     return g.scene;
   }));
   const src = await cache.get(def.file);

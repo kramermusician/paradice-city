@@ -130,3 +130,6 @@ URL flags for testing: `?auto=select|drive|bridge|boat|dock|intro|golf`, `&car=<
 ## Safari black cars (fixed 2026-11-15)
 
 On Kramer's M1 iMac, Safari built a reflection map (PMREM from the sky) that turned every MeshStandard/Physical material black, so every GLB car was black while the Lambert world looked fine. `js/main.js` now probes the map once at startup (a white sphere lit only by it, read back at 8-bit); if it reads black, the game drops the map, raises the hemisphere light, and tones metal down to 0.35 on cars, traffic and props. Force the fallback for testing with `?noenv=1`. The console logs `env probe ... ok` or `BROKEN`.
+
+## Safari car materials (2026-11-15, second fix)
+The env-map fallback did not cure the black cars on the M1 iMac. Safari now draws every car, prop and traffic material with MeshLambertMaterial, the same material the world uses (known good there); cars look more matte in Safari only. Other browsers are unchanged. URL flags: `?carmat=standard` or `?carmat=physical` to try the shinier materials in Safari, `?diag=1` for an on-screen line showing the mode, env probe result and Safari version. Code: `G.fixMaterial` in js/main.js, called from loadModel in js/vehicles.js and the 1.5 s sweep.

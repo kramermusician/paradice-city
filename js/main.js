@@ -116,13 +116,46 @@ G.setSun = (el) => {
   if (G.envBroken) hemi.intensity += 0.6;
 };
 
-// Fallback sweep: tone down metal on everything new in the scene (traffic, police, props).
+// Car material mode (2026-11-15, black cars in Safari on the M1 iMac, not reproducible elsewhere).
+// The world draws with MeshLambertMaterial and looks right there; the cars use Standard/Physical PBR.
+// Safari gets 'lambert' (the world's own material, known good) unless ?carmat=standard|physical says
+// otherwise; every other browser keeps 'physical' (no change). ?diag=1 prints the mode on screen.
+const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Edg/.test(navigator.userAgent);
+G.carMat = params.get('carmat') || (isSafari ? 'lambert' : 'physical');
+const swapped = new WeakMap();
+G.fixMaterial = (m) => {
+  if (!m || !m.isMeshStandardMaterial || G.carMat === 'physical') return m;
+  if (swapped.has(m)) return swapped.get(m);
+  const p = { color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
+    normalMap: m.normalMap, alphaMap: m.alphaMap, side: m.side, transparent: m.transparent, opacity: m.opacity,
+    alphaTest: m.alphaTest, vertexColors: m.vertexColors, fog: m.fog, name: m.name };
+  if (m.transmission > 0) { p.transparent = true; p.opacity = Math.min(p.opacity, 0.35); }
+  let n;
+  if (G.carMat === 'lambert') n = new THREE.MeshLambertMaterial(p);
+  else n = new THREE.MeshStandardMaterial({ ...p, roughness: Math.max(m.roughness, 0.35), metalness: Math.min(m.metalness, 0.35), roughnessMap: m.roughnessMap, metalnessMap: m.metalnessMap });
+  n.userData = m.userData;
+  swapped.set(m, n); swapped.set(n, n);
+  return n;
+};
+G.fixMaterials = (root) => root.traverse((o) => {
+  if (!o.isMesh || !o.material) return;
+  o.material = Array.isArray(o.material) ? o.material.map(G.fixMaterial) : G.fixMaterial(o.material);
+});
+if (params.has('diag')) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;background:#000c;color:#0f0;font:13px monospace;padding:6px 8px;border-radius:4px;pointer-events:none';
+  document.body.appendChild(d);
+  setInterval(() => { d.textContent = `carmat=${G.carMat} safari=${isSafari} envBroken=${G.envBroken} programs=${renderer.info.programs?.length} ${navigator.userAgent.replace(/.*(Version\/\S+).*/, '$1')}`; }, 1000);
+}
+
+// Fallback sweep: catch anything added to the scene later (traffic, police, props, code-built cars).
 if (true) {
   const seen = new WeakSet();
   setInterval(() => {
-    if (!G.envBroken) return;
+    if (!G.envBroken && G.carMat === 'physical') return;
     for (const sc of [scene, G.selScene]) if (sc) sc.traverse((o) => {
       if (!o.isMesh) return;
+      if (G.carMat !== 'physical') { G.fixMaterials(o); return; }
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
         if (!m || seen.has(m) || !m.isMeshStandardMaterial) continue;
         seen.add(m);
