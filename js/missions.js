@@ -40,11 +40,14 @@ export class Missions {
       { x: bay.x, z: bay.z, y: 0, r: 25, name: 'Sarasota bayfront' },
     ];
     // --- start markers
+    // the traps mission starts in the canal a little way from Dad's dock, toward open water
+    const db = this.G.dockBoat, dad = this.G.dad;
     const dockB = P(PLACES.dockBoat);
+    const trapStart = dad ? { x: db.x + dad.ax * 35, z: db.z + dad.az * 35, heading: db.h } : { x: dockB[0] + 45, z: dockB[1] + 10, heading: 0 };
     this.defs = [
       { id: 'sunset', name: 'Sunset Run', need: 'car', color: 0xff8a3d, pos: this.sunStart,
         desc: 'Beat the sunset from Longboat Key over New Pass and the Ringling Bridge to the Sarasota bayfront.' },
-      { id: 'traps', name: 'Check the Traps', need: 'boat', color: 0x35c3ff, pos: { x: dockB[0] + 45, z: dockB[1] + 10, heading: 0 },
+      { id: 'traps', name: 'Check the Traps', need: 'boat', color: 0x35c3ff, pos: trapStart,
         desc: 'Take the boat down the bay side of Longboat Key to five soccer-ball buoys and pull each stone crab trap. The last one is off Cutter Lane.' },
       { id: 'delivery', name: 'Cranberry Delivery', need: 'car', color: 0xe0284a, pos: G.warehouse.front,
         desc: 'Carry cranberry crates on the roof from the Sarasota warehouse to St. Armands Circle. Easy on the brakes.' },
@@ -144,7 +147,6 @@ export class Missions {
     const out = [];
     if (!this.active) {
       for (const d of this.defs) out.push({ x: d.pos.x, z: d.pos.z, color: '#' + d.color.toString(16).padStart(6, '0'), big: true, letter: d.name[0] });
-      const dc = P(PLACES.dockCar); out.push({ x: dc[0], z: dc[1], color: '#ffffff', letter: 'B' });
       if (this.G.dadsPlace) out.push({ x: this.G.dadsPlace.x, z: this.G.dadsPlace.z, color: '#ffd34d', letter: 'D' });
     } else {
       const a = this.active;

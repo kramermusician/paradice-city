@@ -6,7 +6,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const PROPS = {};
-const FILES = { police: 'police-explorer', yacht: 'yacht', lng: 'lng-ship', turtle: 'sea-turtle', palms: 'palms', bush: 'bush' };
+const FILES = { police: 'police-explorer', yacht: 'yacht', lng: 'lng-ship', turtle: 'sea-turtle', palms: 'palms', bush: 'bush',
+  bigboat: 'dad-big-boat', kayak: 'pedal-kayak' };   // Dad's dock (2026-11-15), built in Blender for this game
+const COMPACT = new Set(['police', 'yacht', 'lng', 'bigboat', 'kayak']);
 
 export async function loadProps() {
   const loader = new GLTFLoader();
@@ -22,7 +24,7 @@ export async function loadProps() {
           if (m.transparent && m.map && k !== 'police') { m.transparent = false; m.alphaTest = 0.45; m.depthWrite = true; }
         }
       });
-      PROPS[k] = k === 'police' || k === 'yacht' || k === 'lng' ? compact(g.scene) : g.scene;
+      PROPS[k] = COMPACT.has(k) ? compact(g.scene) : g.scene;
     } catch (e) { console.warn('prop failed to load', f, e); }
   }));
   return PROPS;

@@ -57,6 +57,7 @@ export class World {
     this.roads = roads.roads;
     this.areas = areas;
     this.wm = wm;
+    this.islandLine = ISLAND_LINE;
     progress('Painting the islands');
     await this.loadMask();
     this.buildGround(scene);
@@ -414,6 +415,7 @@ export class World {
     });
     const inBox = (x, z) => boxes.some((b) => x > b[0] && x < b[2] && z > b[1] && z < b[3]);
     let n = 0;
+    this.canalLots = [];
     for (const rd of this.roads) {
       if (!/residential|living_street|unclassified/.test(rd.k)) continue;
       const p = rd.p, np = p.length / 3;
@@ -438,9 +440,23 @@ export class World {
               if (!this.isLand(qx, qz) || this.buildingAt(qx, qz) || this.roadAt(qx, qz, 0)) ok = false;
             }
             if (!ok || this.buildingAt(cx, cz) || this.roadAt(cx, cz, 0)) continue;
+            if (this.exclusions.some(([ex, ez, er]) => (cx - ex) ** 2 + (cz - ez) ** 2 < er * er)) continue;
             const idx = this.addCollider(poly, r() < 0.3 ? 6.8 : 3.8 + r() * 0.8);
             this.bList[idx].hip = true;
             n++;
+            // canal-front lot? walk out the back of the house to the seawall (bay side only, no Gulf beach docks)
+            const nx = -tz * side, nz = tx * side;
+            for (let d = 2; d <= 30; d += 2) {
+              const qx = cx + nx * (D / 2 + d), qz = cz + nz * (D / 2 + d);
+              if (this.roadAt(qx, qz, 0) || this.buildingAt(qx, qz)) break;
+              if (!this.isLand(qx, qz)) {
+                if (this.westOfIslands(qx, qz)) break;
+                // need real water out there (a canal at least ~14 m wide), not a pond corner
+                if (this.isLand(qx + nx * 12, qz + nz * 12)) break;
+                this.canalLots.push({ x: cx + nx * (D / 2 + d - 2), z: cz + nz * (D / 2 + d - 2), nx, nz, tx, tz, r: Math.abs(Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453) % 1 });
+                break;
+              }
+            }
           }
         }
       }

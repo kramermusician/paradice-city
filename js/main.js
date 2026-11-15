@@ -18,6 +18,7 @@ import { Police } from './police.js';
 import { Bikes } from './bikes.js';
 import { BigMap } from './bigmap.js';
 import { Nav } from './nav.js';
+import { placeDadsPlace, buildDadsPlace, CanalDocks } from './dads.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
 const $ = (id) => document.getElementById(id);
@@ -212,6 +213,7 @@ function placeStoreAndWarehouse(W) {
   const cx = wx, cz = wz;
   G.warehouse = { cx, cz, ang: 0 };
   W.exclusions.push([G.store.cx, G.store.cz, 48], [cx, cz, 40]);
+  placeDadsPlace(W, G);
 }
 
 function buildSetPieces() {
@@ -242,32 +244,20 @@ function buildSetPieces() {
   wh.side = { x: f2.x, z: f2.z };
   // the westbound side of Fruitville Road, pointed toward the bayfront and the causeway
   wh.truckSpot = { x: ts.x, z: ts.z, heading: Math.cos(ts.heading) < 0 ? ts.heading : ts.heading + Math.PI };
-  // boat dock
-  const [dcx, dcz] = PLACES.dockCar.xz, [dbx, dbz] = PLACES.dockBoat.xz;
-  const dock = makeDock(Math.hypot(dbx - dcx, dbz - dcz) - 2);
-  dock.position.set(dcx + 6, 0, dcz + 3.5); dock.rotation.y = Math.atan2(-(dbz - dcz), dbx - dcx);
-  scene.add(dock);
-  G.dockCar = { x: dcx, z: dcz };
-  G.dockBoat = { x: dbx, z: dbz };
-  G.dockMarker = makeMarker(0xffffff, "Dad's boat");
-  G.dockMarker.position.set(dcx, 0, dcz);
+  // Dad's place on Cutter Lane: his house, his dock on the canal behind it (both boats, two kayaks).
+  // The gold marker in the street is where a car swaps to his boat.
+  buildDadsPlace(scene, W, G);
+  if (!G.dockBoat) {   // Cutter Lane missing from the map data: fall back to the old Harbourside dock
+    const [dcx, dcz] = PLACES.dockCar.xz, [dbx, dbz] = PLACES.dockBoat.xz;
+    G.dockCar = { x: dcx, z: dcz }; G.dockBoat = { x: dbx, z: dbz, h: 0 }; G.dadsPlace = { x: dcx, z: dcz };
+    const dock = makeDock(Math.hypot(dbx - dcx, dbz - dcz) - 2);
+    dock.position.set(dcx + 6, 0, dcz + 3.5); dock.rotation.y = Math.atan2(-(dbz - dcz), dbx - dcx);
+    scene.add(dock);
+  }
+  G.dockMarker = makeMarker(0xffd34d, "Dad's place");
+  G.dockMarker.position.set(G.dockCar.x, 0, G.dockCar.z);
   G.dockMarker.scale.set(0.6, 0.5, 0.6);
   scene.add(G.dockMarker);
-  // Dad's place: the middle of Cutter Lane, a small gold marker
-  const cl = W.roads.filter((r) => r.n === PLACES.dadsPlace.road).sort((a, b) => b.p.length - a.p.length)[0];
-  if (cl) {
-    const p = cl.p, n = p.length / 3;
-    let len = 0; const cum = [0];
-    for (let i = 0; i < n - 1; i++) { len += Math.hypot(p[i * 3 + 3] - p[i * 3], p[i * 3 + 4] - p[i * 3 + 1]); cum.push(len); }
-    let i = 0; while (i < n - 2 && cum[i + 1] < len / 2) i++;
-    const u = (len / 2 - cum[i]) / (cum[i + 1] - cum[i] || 1);
-    G.dadsPlace = { x: p[i * 3] + (p[i * 3 + 3] - p[i * 3]) * u, z: p[i * 3 + 1] + (p[i * 3 + 4] - p[i * 3 + 1]) * u };
-    const dm = makeMarker(0xffd34d, "Dad's place");
-    dm.position.set(G.dadsPlace.x, 0, G.dadsPlace.z);
-    dm.scale.set(0.45, 0.5, 0.45);
-    scene.add(dm);
-    G.dadsMarker = dm;
-  }
 }
 
 // ---------------------------------------------------------------- vehicles
@@ -287,14 +277,14 @@ G.boatId = 'boat';
 G.goBoat = async (x, z, h) => {
   const b = await getVehicle(G.boatId);
   if (G.active && G.active !== b && G.active.kind === 'car') { G.active.vel.set(0, 0); G.active.speed = 0; }
-  if (x === undefined) { x = G.dockBoat.x; z = G.dockBoat.z; h = 0; }
+  if (x === undefined) { x = G.dockBoat.x; z = G.dockBoat.z; h = G.dockBoat.h; }
   b.place(x, z, h, -0.35);
   setActive(b);
 };
 G.backToCar = () => {
   const c = G.car;
   if (G.active && G.active.kind === 'truck') G.leaveTruck(true);
-  if (G.active && G.active.kind === 'boat') { G.active.place(G.dockBoat.x, G.dockBoat.z, 0, -0.35); }
+  if (G.active && G.active.kind === 'boat') { G.active.place(G.dockBoat.x, G.dockBoat.z, G.dockBoat.h, -0.35); }
   const r = world.nearestRoadPoint(G.dockCar.x, G.dockCar.z, { ground: true });
   if (G.active && G.active.kind === 'boat') c.place(r.x, r.z, r.heading, 0);
   setActive(c);
@@ -315,6 +305,19 @@ G.leaveTruck = (silent) => {
   setActive(c);
 };
 
+// the player's boat bumps off Dad's bigger boat at the dock
+function dadsDockHit(v) {
+  let hit = 0;
+  for (const [x, z, r] of G.dadsDockCircles || []) {
+    const dx = v.pos.x - x, dz = v.pos.z - z, d = Math.hypot(dx, dz), R = r + 1.4;
+    if (d >= R || d < 1e-3) continue;
+    const nx = dx / d, nz = dz / d, into = v.vel.x * nx + v.vel.y * nz;
+    if (into < 0) { v.vel.x -= nx * into * 1.3; v.vel.y -= nz * into * 1.3; hit = Math.max(hit, -into); }
+    v.pos.x += nx * (R - d); v.pos.z += nz * (R - d);
+  }
+  return hit;
+}
+
 function respawnOnRoad(v) {
   const p = G.lastGood || { x: v.pos.x, z: v.pos.z };
   const r = world.nearestRoadPoint(p.x, p.z, { ground: true });
@@ -327,6 +330,7 @@ const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), camUp = new T
 let cine = null;
 function updateCamera(dt, snap) {
   const v = G.active;
+  if (G.freeCam) { camera.position.set(...G.freeCam.pos); camera.lookAt(...G.freeCam.look); return; }   // test screenshots only
   if (params.has('cam')) { const c = params.get('cam').split(',').map(Number); camera.position.set(v.pos.x + c[0], v.y + c[1], v.pos.z + c[2]); camera.lookAt(v.pos.x, v.y, v.pos.z); return; }
   if (cine) {
     camera.position.lerp(cine.pos, Math.min(1, dt * 1.5));
@@ -582,7 +586,7 @@ async function startDrive() {
   }
   const boat = await getVehicle(G.boatId);
   scene.add(boat.root);
-  if (!G.started) boat.place(G.dockBoat.x, G.dockBoat.z, 0, -0.35);
+  if (!G.started) boat.place(G.dockBoat.x, G.dockBoat.z, G.dockBoat.h, -0.35);
   if (def.kind === 'air') {
     const f = await getVehicle(def.id);
     let x, z, h;
@@ -601,7 +605,7 @@ async function startDrive() {
   } else if (def.kind === 'boat') {
     const r = world.nearestRoadPoint(G.dockCar.x, G.dockCar.z, { ground: true });
     car.place(r.x, r.z, r.heading, 0); scene.add(car.root);
-    await G.goBoat(G.dockBoat.x + 12, G.dockBoat.z, 0);
+    await G.goBoat();
   } else if (def.kind === 'truck') {
     const t = await G.useTruck();
     const s = G.warehouse.truckSpot;
@@ -733,7 +737,7 @@ function updatePlay(dt) {
     const hit = Math.max(G.traffic.collide(v), G.bikes.collide(v), G.police.collide(v));
     if (hit > 3) v.events.push({ type: 'crash', impact: hit });
   } else {
-    const hit = G.boats.collide(v);
+    const hit = Math.max(G.boats.collide(v), G.docks.collide(v), dadsDockHit(v));
     if (hit) { v.sync(); if (hit > 3) v.events.push({ type: 'crash', impact: hit }); }
   }
   for (const e of v.events) {
@@ -758,7 +762,7 @@ function updatePlay(dt) {
   if (!G.missions.active || G.missions.active.id === 'traps') {
     if (v.kind === 'car' && Math.hypot(v.pos.x - G.dockCar.x, v.pos.z - G.dockCar.z) < 10) {
       G.hud.hint("Press E to take Dad's boat");
-      if (input.interact) { G.goBoat(G.dockBoat.x + 6, G.dockBoat.z, 0); chime('good'); updateCamera(dt, true); }
+      if (input.interact) { G.goBoat(); chime('good'); updateCamera(dt, true); }
     } else if (v.kind === 'boat' && Math.hypot(v.pos.x - G.dockBoat.x, v.pos.z - G.dockBoat.z) < 20) {
       G.hud.hint('Press E to tie up and drive the car');
       if (input.interact) { G.backToCar(); chime('good'); updateCamera(dt, true); }
@@ -788,7 +792,6 @@ function updatePlay(dt) {
   // arrows only show ahead of the car, so say so when the route is behind it
   G.behindT = G.nav.mesh.visible && G.nav.behind && Math.abs(v.speed) > 4 ? (G.behindT || 0) + dt : 0;
   if (G.behindT > 2.5) { G.behindT = -6; G.hud.toast('Turn around: the road arrows are behind you', 2.5); }
-  if (G.dadsMarker) G.dadsMarker.userData.ring.rotation.z += dt;
   updateCamera(dt);
 }
 
@@ -822,6 +825,7 @@ function frame(now) {
   scene.fog.far = 4200 + high * 4000; scene.fog.near = 450 + high * 900;
   world.update(camera.position);
   if (G.flora) G.flora.update(dt, G.active.pos);
+  if (G.docks) G.docks.update(G.active.pos);
   G.dockMarker.userData.ring.rotation.z += dt;
   renderer.render(scene, camera);
 }
@@ -853,6 +857,7 @@ async function boot() {
     G.tanker = new Tanker(scene, world);
     G.turtles = new Turtles(scene, world);
     G.flora = new Flora(scene, world);
+    G.docks = new CanalDocks(scene, world, G);
     G.nav = new Nav(scene, world);
     G.police = new Police(scene, world, G);
     G.bikes = new Bikes(scene, world);
@@ -871,7 +876,7 @@ async function boot() {
     G.openSelect();
     requestAnimationFrame(frame);
     G.ready = true;
-    console.log(`Paradice City ready: ${world.roads.length} roads, ${world.bList.length} buildings, ${world.palmCount} palms, ${world.houseCount} houses`);
+    console.log(`Paradice City ready: ${world.roads.length} roads, ${world.bList.length} buildings, ${world.palmCount} palms, ${world.houseCount} houses, ${G.docks.count.lots} canal docks, ${G.docks.count.boats} docked boats`);
     if (params.has('auto')) await autoShot(params.get('auto'));
   } catch (e) {
     console.error(e);

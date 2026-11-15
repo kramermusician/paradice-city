@@ -113,7 +113,9 @@ export const PLACES = {
   golf: { ll: [27.3690, -82.6210] },
   // stone crab traps down the bay side of Longboat Key, from near the dock to the water off Cutter Lane
   buoys: [{ xz: [950, 150] }, { xz: [1500, 900] }, { xz: [2050, 1550] }, { xz: [2600, 2050] }, { xz: [2950, 2480] }],
-  dadsPlace: { road: 'Cutter Lane' },
+  // Dad's house, Cutter Lane. at: how far along the street (0 south end, 1 north end); side: 1 east, -1 west.
+  // Placed from the street and the canal in the map data, not from a geocoder (his address never leaves the machine).
+  dadsPlace: { road: 'Cutter Lane', at: 0.5, side: 1 },
 };
 
 // The barrier-island center line in local meters (x, z), north to south, measured from the

@@ -133,3 +133,11 @@ On Kramer's M1 iMac, Safari built a reflection map (PMREM from the sky) that tur
 
 ## Safari car materials (2026-11-15, second fix)
 The env-map fallback did not cure the black cars on the M1 iMac. Safari now draws every car, prop and traffic material with MeshLambertMaterial, the same material the world uses (known good there); cars look more matte in Safari only. Other browsers are unchanged. URL flags: `?carmat=standard` or `?carmat=physical` to try the shinier materials in Safari, `?diag=1` for an on-screen line showing the mode, env probe result and Safari version. Code: `G.fixMaterial` in js/main.js, called from loadModel in js/vehicles.js and the 1.5 s sweep.
+
+## Dad's place and canal docks (2026-11-15)
+
+- Dad's house at Cutter Lane, built in code (`js/dads.js`) from the May 2026 Street View photos in `~/Dropbox/Paradice City Looks/`: peach stucco, pale terracotta tile hip roofs, white trim, one-story wings with a two-story middle, a front-gable garage wing with white quoins and the oval ornament, a curved paver drive around an island bed of three royal palms, red ti plants and an agave.
+- The lot is placed from the map data, not a geocoder (his address never leaves the machine): `PLACES.dadsPlace` in `js/config.js` has `at` (0 is the south end of Cutter Lane, 1 the north end) and `side` (1 east, -1 west). Change those two numbers to move the house.
+- His dock is on the canal behind the house. His boat ties up there (it replaced the old Harbourside Drive dock; the gold "Dad's place" marker in the street is the car to boat swap), with his bigger boat behind it and two pedal kayaks on the dock. The Check the Traps start moved into his canal.
+- Every generated canal-front house on the bay side gets a dock (`world.canalLots`), and most docks get a boat: center consoles, cruisers, pontoons, a few sailboats and skiffs, some up on lifts. The player's boat bumps off them. They are instanced per 1 km tile and drawn within 1.6 km.
+- `build/label_refs.py` labels every photo in the Dropbox drop folder with the local vision model (qwen3-vl:30b-a3b) and writes `labels.json` and `labels.md` beside them. `build/test/dads.cjs` screenshots the house, the dock and the canal.
