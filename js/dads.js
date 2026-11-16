@@ -35,6 +35,14 @@ export function placeDadsPlace(W, G) {
   // walk out the back to the seawall
   let S = 60;
   for (let d = 8; d < 90; d += 1) if (!W.isLand(rx + nx * d, rz + nz * d)) { S = d - 1; break; }
+  // the land mask is 5 m cells, so the shore is jagged: take the farthest land along the whole dock span
+  // (both boats and the kayaks) so nothing tied up sits on a land cell
+  const S0 = S;
+  for (let v = -18; v <= 16; v += 2) {
+    for (let d = S0 - 6; d < S0 + 14; d += 1) {
+      if (!W.isLand(rx + nx * d + tx * v, rz + nz * d + tz * v)) { S = Math.max(S, d - 1); break; }
+    }
+  }
   const edge = rd.w / 2;
   const hc = edge + SETBACK;         // house center: the front yard is about 13 m deep, the house about 12 m
   const dad = {
@@ -319,14 +327,15 @@ export function buildDadsPlace(scene, W, G) {
   const dock = new THREE.Mesh(makeDockGeo(26, 2.4), new THREE.MeshLambertMaterial({ vertexColors: true }));
   dock.position.set(d.sx + d.nx * 2.0, 0, d.sz + d.nz * 2.0); dock.rotation.y = h; scene.add(dock);
   // the bigger boat tied up behind the Grady, along the dock
-  const bx = d.sx + d.nx * 5.8 - d.ax * 8, bz = d.sz + d.nz * 5.8 - d.az * 8, bh = G.dockBoat.h;
+  const bx = d.sx + d.nx * 5.8 - d.ax * 10, bz = d.sz + d.nz * 5.8 - d.az * 10, bh = G.dockBoat.h;
   const big = PROPS.bigboat ? PROPS.bigboat.clone() : makeTrafficBoat(4);
   big.position.set(bx, PROPS.bigboat ? 0 : 0, bz); big.rotation.y = bh; scene.add(big); G.dadsBigBoat = big;
   // two pedal kayaks on the dock, side by side
   for (const s of [-0.5, 0.5]) {
     const k = PROPS.kayak ? PROPS.kayak.clone() : kayakFallback(0x2fa58a);
     const kx = d.sx + d.nx * (2.0 + s * 1.05) + d.ax * 9.5, kz = d.sz + d.nz * (2.0 + s * 1.05) + d.az * 9.5;
-    k.position.set(kx, 0.96, kz); k.rotation.y = h; scene.add(k);
+    k.rotation.y = h; k.position.set(kx, 0, kz); k.updateMatrixWorld(true);
+    k.position.y = 0.96 - new THREE.Box3().setFromObject(k).min.y + 0.02; scene.add(k);
   }
   G.dadsDockCircles = [[bx + Math.cos(bh) * 3, bz - Math.sin(bh) * 3, 2.6], [bx - Math.cos(bh) * 3, bz + Math.sin(bh) * 3, 2.6]];
 }

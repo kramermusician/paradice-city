@@ -315,8 +315,13 @@ export class Boat extends Vehicle {
     if (canopy) { const cb = new THREE.Box3().setFromObject(canopy); top = cb.max.y; }
     this.pin = makePinwheel();
     this.pin.position.set(-0.4, top - 0.02, 0.45);
+    // Suzanne's Grady-White (2026-11-15) marks the pinwheel spot and the standing helm eye with empties
+    const pm = model.getObjectByName('pin_mount'), eye = model.getObjectByName('driver_eye');
+    model.updateMatrixWorld(true);
+    if (pm) this.pin.position.copy(model.worldToLocal(pm.getWorldPosition(new THREE.Vector3())));
     this.body.add(this.pin);
-    this.hood = new THREE.Vector3(-0.6, 2.1, 0);
+    this.hood = eye ? model.worldToLocal(eye.getWorldPosition(new THREE.Vector3())) : new THREE.Vector3(-0.6, 2.1, 0);
+    this.ladder = model.getObjectByName('ladder');
     this.seat = this.hood;
     this.trim = 0;
     this.wakeT = 0;
@@ -367,6 +372,7 @@ export class Boat extends Vehicle {
     this.y = WATER_Y + bob + plane * 0.12 + 0.04;
     this.pitch = this.trim + Math.sin(this.t * 1.1 + 0.4) * 0.018 * bobAmp;
     this.roll = Math.sin(this.t * 0.9) * 0.035 * bobAmp - this.steer * 0.12 * Math.min(1, sp / 8);
+    if (this.ladder) this.ladder.visible = sp < 2;   // the stern ladder is down only when drifting or tied up
     if (this.prop) this.prop.rotation.x += dt * (6 + (inp.throttle || 0) * 60 + sp * 2) * Math.sign(vf || 1);
     this.pos.y = this.y;
     this.spinPinwheel(dt);
