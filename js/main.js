@@ -24,7 +24,7 @@ import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeFor
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const G = window.G = { input, time: 0, paused: false, defaultSun: 3.0, camMode: 0, THREE };
+const G = window.G = { input, time: 0, paused: false, defaultSun: 4.5, defaultAz: 115, camMode: 0, THREE };
 
 // settings that stick between visits (pause menu, Settings)
 const CAM_NAMES = ['Chase', 'Driver', 'Overhead'];
@@ -83,9 +83,12 @@ const envScene = new THREE.Scene(); envScene.add(envSky);
 let envRT = null, envEl = 99;
 const sunDir = new THREE.Vector3();
 
-G.setSun = (el) => {
-  G.sunEl = el;
-  const az = THREE.MathUtils.degToRad(245), e = THREE.MathUtils.degToRad(el);
+// el: degrees above the horizon. azDeg: compass bearing of the sun (115 = the sunrise over Sarasota Bay
+// the game opens on, 245 = the Gulf sunset the Sunset Run counts down to).
+G.setSun = (el, azDeg = G.defaultAz) => {
+  const turned = G.sunAz !== undefined && G.sunAz !== azDeg;
+  G.sunEl = el; G.sunAz = azDeg;
+  const az = THREE.MathUtils.degToRad(azDeg), e = THREE.MathUtils.degToRad(el);
   sunDir.set(Math.sin(az) * Math.cos(e), Math.sin(e), -Math.cos(az) * Math.cos(e));
   const k = THREE.MathUtils.clamp((el + 1) / 7, 0, 1);
   for (const s of [sky, envSky]) {
@@ -104,7 +107,7 @@ G.setSun = (el) => {
   waterUniforms.uSunDir.value.copy(sunDir);
   waterUniforms.uSkyColor.value.setRGB(0.95, 0.5 + 0.15 * k, 0.42 + 0.1 * k);
   waterUniforms.uSunColor.value.setRGB(1.0, 0.45 + 0.25 * k, 0.2 + 0.15 * k);
-  if (Math.abs(el - envEl) > 1.2) {
+  if (turned || Math.abs(el - envEl) > 1.2) {
     envEl = el;
     if (envRT) envRT.dispose();
     envRT = pmrem.fromScene(envScene);
@@ -616,9 +619,9 @@ async function startDrive() {
     car.place(s.x, s.z + 6, s.heading, 0); car.root.removeFromParent();
   } else {
     if (!G.started || params.has('spawn')) {
-      const sp = world.nearestRoadPoint(...xz(...PLACES.spawn.ll), { name: 'Gulf of Mexico Drive', ground: true });
-      const h0 = Math.cos(sp.heading) > 0 ? sp.heading + Math.PI : sp.heading; // facing up the key, toward the sunset
-      car.place(sp.x, sp.z, h0, 0);
+      const s0 = startPose();
+      car.place(s0.x, s0.z, s0.h, s0.y);
+      if (!G.started) { const k = 13; car.vel.set(Math.cos(s0.h) * k, -Math.sin(s0.h) * k); car.speed = k; } // already rolling toward St. Armands
     } else if (from && (from.kind === 'boat' || from.kind === 'air')) {
       // from the water or the sky: the nearest road below
       const r = world.nearestRoadPoint(from.x, from.z, { ground: true });
@@ -629,6 +632,23 @@ async function startDrive() {
   }
   G.started = true;
   updateCamera(0.016, true);
+}
+// Opening shot (Kramer, 2026-11-18): coming down off the New Pass bridge from Longboat Key at sunrise,
+// headed for St. Armands Circle and on to downtown Sarasota. ?spawn=key puts you back on Gulf of Mexico Drive.
+function startPose() {
+  if (params.get('spawn') !== 'key') {
+    const deck = world.roads.find((r) => r.n === 'John Ringling Parkway' && r.b);
+    if (deck) {
+      const p = deck.p, n = p.length / 3;
+      // the deck runs north to south or south to north; drive it toward St. Armands (south, +z)
+      const south = p[(n - 1) * 3 + 1] > p[1];
+      const at = (k) => south ? k : n - 1 - k, i = at(Math.floor(n * 0.55)), j = at(Math.floor(n * 0.55) + 1);
+      const x = p[i * 3], z = p[i * 3 + 1], y = p[i * 3 + 2];
+      return { x, z, y, h: Math.atan2(-(p[j * 3 + 1] - z), p[j * 3] - x) };
+    }
+  }
+  const sp = world.nearestRoadPoint(...xz(...PLACES.spawn.ll), { name: 'Gulf of Mexico Drive', ground: true });
+  return { x: sp.x, z: sp.z, y: 0, h: Math.cos(sp.heading) > 0 ? sp.heading + Math.PI : sp.heading };
 }
 G.openSelect = () => {
   G.mode = 'select';

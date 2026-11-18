@@ -321,7 +321,9 @@ export class World {
       if (d > s[6] + 0.6) continue;
       const y = s[2] + (s[5] - s[2]) * u;
       if (y > yRef + 2.6) continue;
-      const dy = Math.abs(y - yRef);
+      // Same level (a deck and its ramps): nearest centreline wins, so a bend never hands the car to a
+      // segment further along with a different height. A different level only wins on height.
+      const dy = Math.abs(y - yRef) < 1.5 ? d * 0.01 : 100 + Math.abs(y - yRef);
       if (dy < bestDy) { bestDy = dy; best = { y, road: this.roads[s[7]], hw: s[6], d, dir: Math.atan2(-dz, dx), cx: px, cz: pz }; }
     }
     return best;

@@ -305,7 +305,7 @@ export class Missions {
   updSunset(dt, v, a) {
     const G = this.G;
     const left = a.limit - a.t;
-    G.setSun(6.0 - 6.6 * Math.min(1, a.t / a.limit));
+    G.setSun(6.0 - 6.6 * Math.min(1, a.t / a.limit), 245);
     const cp = this.sunsetCps[a.i];
     G.hud.mission(`<b>Sunset Run</b><br>Sun sets in <span class="big">${fmt(left)}</span><br>Next: ${cp.name} (${a.i + 1} of ${this.sunsetCps.length})`);
     if (this.near(v, cp, cp.r) && Math.abs(v.y - (cp.y || 0)) < 8) {

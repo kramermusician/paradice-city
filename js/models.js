@@ -685,13 +685,58 @@ export function makeCyclist(shirt = 0x3a7bd5, bike = 0x222222, skin = 0xc68e6b) 
 
 // Police cruiser built to share its light materials across the fleet: pass {red, blue} so a whole
 // fleet flashes in step and lights on or off is just a material swap (no new shaders mid-game).
+// Door livery for the two departments (2026-11-18): Sarasota Police (navy) and Longboat Key Police (teal).
+// Both decal pairs ride on every cruiser; police.js shows the one for the area the car is in.
+// Colours and wording are our own simple take, not copied from the real cars.
+export const AGENCIES = {
+  spd: { top: 'SARASOTA', main: 'POLICE', stripe: '#1d3466', accent: '#c9a227', text: '#1d3466' },
+  lbk: { top: 'LONGBOAT KEY', main: 'POLICE', stripe: '#0f7f86', accent: '#58c6c9', text: '#0b5e63' },
+};
+const liveryTex = {};
+function liveryTexture(id) {
+  if (liveryTex[id]) return liveryTex[id];
+  const a = AGENCIES[id], c = document.createElement('canvas'); c.width = 1024; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = a.stripe; x.fillRect(0, 150, 1024, 46);
+  x.fillStyle = a.accent; x.fillRect(0, 202, 1024, 12);
+  x.fillStyle = a.text; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+  x.font = 'bold 44px Helvetica, Arial, sans-serif'; x.fillText(a.top, 512, 62);
+  x.font = '900 82px Helvetica, Arial, sans-serif'; x.fillText(a.main, 512, 140);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return (liveryTex[id] = t);
+}
+let doorZ = null;   // half-width of the Explorer at door height, measured once by a ray
+function addLivery(ex) {
+  const bb = new THREE.Box3().setFromObject(ex), len = bb.max.x - bb.min.x, hgt = bb.max.y - bb.min.y;
+  const cx = (bb.max.x + bb.min.x) / 2 - len * 0.04, y = bb.min.y + hgt * 0.42;
+  if (doorZ === null) {
+    ex.updateMatrixWorld(true);
+    const rc = new THREE.Raycaster(new THREE.Vector3(cx, y, bb.max.z + 3), new THREE.Vector3(0, 0, -1));
+    const hit = rc.intersectObject(ex, true)[0];
+    doorZ = hit ? hit.point.z : bb.max.z * 0.95;
+  }
+  const w = len * 0.62, h = w / 4;
+  const out = {};
+  for (const id of Object.keys(AGENCIES)) {
+    const mat = new THREE.MeshLambertMaterial({ map: liveryTexture(id), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    const g = new THREE.Group();
+    for (const sd of [1, -1]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      m.position.set(cx, y, sd * (doorZ + 0.07)); if (sd < 0) m.rotation.y = Math.PI;
+      m.renderOrder = 2; g.add(m);
+    }
+    g.visible = id === 'spd'; ex.add(g); out[id] = g;
+  }
+  return out;
+}
 export function makePoliceCar() {
   const ex = explorer();
   if (ex) {
     const red = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.62), null), blue = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.62), null);
     red.position.set(-0.35, 1.78, 0.36); blue.position.set(-0.35, 1.78, -0.36);
     ex.add(red, blue);
-    ex.userData = { red, blue };
+    const livery = addLivery(ex);
+    ex.userData = { red, blue, livery, agency: 'spd' };
     return ex;
   }
   const g = new THREE.Group();

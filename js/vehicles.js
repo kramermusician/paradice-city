@@ -270,15 +270,22 @@ export class Car extends Vehicle {
     else if (world.isLand(this.pos.x, this.pos.z)) ty = 0;
     else if (this.y < 1.2) { this.emit('water'); ty = this.y; }
     else ty = this.y;
-    if (ty < this.y - 0.5) this.y = Math.max(ty, this.y - 9.8 * dt * 2); else this.y += (ty - this.y) * Math.min(1, dt * 15);
+    // On a deck or a ramp the wheels ride the surface exactly; the old lag let the car sink up to 0.3 m
+    // into a climbing bridge and float over a falling one, which read as a glitch (bridges.cjs).
+    if (r && Math.abs(ty - this.y) < 1.2) this.y = ty;
+    else if (ty < this.y - 0.5) this.y = Math.max(ty, this.y - 9.8 * dt * 2); else this.y += (ty - this.y) * Math.min(1, dt * 15);
     // pitch from slope plus a little from accel, roll from cornering
     const [fx, fz] = this.fwd();
     const hl = this.len * 0.45;
     const rf = world.roadAt(this.pos.x + fx * hl, this.pos.z + fz * hl, this.y);
     const rb = world.roadAt(this.pos.x - fx * hl, this.pos.z - fz * hl, this.y);
-    const slope = (rf && rb) ? Math.atan2(rf.y - rb.y, hl * 2) : 0;
+    // slope only from the same deck the car is on (a lookup can land on the road under the bridge), clamped
+    let slope = (rf && rb && Math.abs(rf.y - this.y) < 1.5 && Math.abs(rb.y - this.y) < 1.5) ? Math.atan2(rf.y - rb.y, hl * 2) : (this.slopeHeld || 0);
+    slope = THREE.MathUtils.clamp(slope, -0.15, 0.15);
+    this.slopeHeld = slope;
     const accPitch = THREE.MathUtils.clamp(-this.decel * 0.004, -0.04, 0.04);
-    this.pitch += (slope + accPitch - this.pitch) * Math.min(1, dt * 8);
+    this.accPitchS = (this.accPitchS || 0) + (accPitch - (this.accPitchS || 0)) * Math.min(1, dt * 3);
+    this.pitch += (slope + this.accPitchS - this.pitch) * Math.min(1, dt * 5);
     const latAcc = this.speed * this.steer;
     this.roll += (THREE.MathUtils.clamp(-latAcc * 0.004, -0.06, 0.06) - this.roll) * Math.min(1, dt * 6);
     this.pos.y = this.y;

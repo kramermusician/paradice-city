@@ -17,6 +17,8 @@
   .title-sub { font-size: 20px; opacity: .85; margin-top: 6px; }
   #select { position: fixed; inset: 0; display: none; pointer-events: none; z-index: 20; }
   #select .panel { pointer-events: auto; width: 330px; margin: 28px; background: rgba(20,18,30,.62); border-radius: 18px; padding: 18px; backdrop-filter: blur(6px); align-self: flex-start; max-height: calc(100% - 56px); overflow: auto; }
+  #selHint { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font-size: 17px; letter-spacing: .02em; color: #fff; background: rgba(20,18,30,.55); padding: 7px 18px; border-radius: 999px; backdrop-filter: blur(6px); white-space: nowrap; }
+  #selHint b { color: #ff7ab6; }
   #select h1 { margin: 0 0 4px; font-size: 32px; }
   #select .sub { opacity: .8; margin-bottom: 14px; font-size: 14px; }
   #vlist button { display: flex; justify-content: space-between; align-items: baseline; width: 100%; margin: 4px 0; padding: 11px 14px; border: 0; border-radius: 10px; background: rgba(255,255,255,.08); color: #fff; text-align: left; }
@@ -65,7 +67,7 @@
   #alt { display: none; position: absolute; right: 150px; bottom: 30px; padding: 6px 10px 4px; background: rgba(15,12,25,.6); border-radius: 8px; text-align: center; font-weight: 800; font-size: 10px; letter-spacing: 1px; }
   #alt b { display: block; font-size: 24px; letter-spacing: 0; }
   #wp { display: none; position: absolute; right: 30px; top: 92px; background: rgba(15,12,25,.6); padding: 6px 14px 6px 8px; border-radius: 20px; font-size: 17px; font-weight: 700; }
-  #wpArrow { display: inline-block; color: #ff4fd8; font-size: 20px; margin-right: 6px; transition: transform .1s linear; }
+  #wpArrow { display: inline-block; vertical-align: middle; line-height: 0; margin-right: 8px; transition: transform .1s linear; }
   #wanted { display: none; position: absolute; left: 50%; top: 20px; transform: translateX(-50%); text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,.7); }
   #wanted span { font-size: 34px; color: #ffd34d; letter-spacing: 4px; }
   #wanted i { color: rgba(255,255,255,.25); font-style: normal; }
@@ -90,6 +92,7 @@
 <div id="loading"><img src="assets/branding/logo-paradice-city.png" alt="Longboat Key: Paradice City"><div class="title-sub">Happy birthday, Dad</div><p id="loadmsg">Loading</p></div>
 
 <div id="select">
+  <div id="selHint">Choose your ride, then press <b>Drive</b></div>
   <div class="panel">
     <h1>Paradice City</h1>
     <div class="sub">Pick a ride. Up and down to browse, Enter to drive. Press V while driving to come back here.</div>
@@ -109,7 +112,7 @@
   <div id="radioTag"></div>
   <div id="limit">SPEED LIMIT<span id="limitNum">45</span></div>
   <div id="alt">ALT<b id="altNum">0</b>FT</div>
-  <div id="wp"><span id="wpArrow">▲</span><span id="wpDist"></span></div>
+  <div id="wp"><span id="wpArrow"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 1.5 L21 12 L15 12 L15 22.5 L9 22.5 L9 12 L3 12 Z" fill="#ff4fd8" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span id="wpDist"></span></div>
   <div id="wanted"></div>
   <div id="speedo"><div id="speed">0</div><small>mph</small></div>
   <div id="area"></div>

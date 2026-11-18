@@ -69,6 +69,12 @@ export class Police {
     m.userData.blue.material = on ? this.mats.onB : this.mats.offB;
     m.userData.on = on;
   }
+  setAgency(m, id) {
+    const u = m.userData; if (!u.livery || u.agency === id) return;
+    for (const k in u.livery) u.livery[k].visible = k === id;
+    u.agency = id;
+  }
+  agencyName(m) { return m && m.userData.agency === 'lbk' ? 'Longboat Key Police' : 'Sarasota Police'; }
   prewarmList() { return [this.sample, this.heli]; }
   heliCount() { return this.heli.visible ? 1 : 0; }
   allCops() { return [...this.patrol.cars.filter((c) => c.m.visible && c.way >= 0 || c.chase), ...this.traps]; }
@@ -122,6 +128,12 @@ export class Police {
     for (const t of this.traps) t.m.visible = enabled;
     if (!enabled) { if (this.chase) this.stop(true); this.heli.visible = false; return; }
     this.patrol.update(dt, v);
+    // Longboat Key cars on the key, Sarasota cars everywhere else (a car swaps decals when it crosses)
+    this.liveryT = (this.liveryT || 0) - dt;
+    if (this.liveryT <= 0) {
+      this.liveryT = 0.5;
+      for (const c of [...this.patrol.cars, ...this.traps]) this.setAgency(c.m, this.world.areaName(c.m.position.x, c.m.position.z) === 'Longboat Key' ? 'lbk' : 'spd');
+    }
     this.cooldown = Math.max(0, this.cooldown - dt);
     // the whole fleet's lights flash in step
     const f = Math.floor(G.time * 6) % 2;
@@ -132,7 +144,7 @@ export class Police {
     if (this.chase) { this.updChase(dt, v); return; }
     if (this.cooldown > 0) { this.patrol.copHit = null; return; }
     // bumped a cruiser
-    if (this.patrol.copHit) { const c = this.patrol.copHit; this.patrol.copHit = null; this.start(c, 'You bumped a police car. Lights are on.'); return; }
+    if (this.patrol.copHit) { const c = this.patrol.copHit; this.patrol.copHit = null; this.start(c, `You bumped a ${this.agencyName(c.m)} car. Lights are on.`); return; }
     // speeding near a cruiser or a trap
     if (!v.lastRoad) return;
     const mph = Math.abs(v.speed) * MPH, lim = G.missions.limitAt(v);
@@ -141,7 +153,7 @@ export class Police {
     if (this.overT < 0.4) return;
     for (const c of this.allCops()) {
       if (Math.hypot(c.m.position.x - v.pos.x, c.m.position.z - v.pos.z) < SPOT_RANGE) {
-        this.start(c, `${c.trap ? 'Speed trap! ' : ''}${Math.round(mph)} in a ${lim}. Lights behind you: pull over or lose them.`, Math.round(mph), lim);
+        this.start(c, `${c.trap ? 'Speed trap! ' : ''}${this.agencyName(c.m)}: ${Math.round(mph)} in a ${lim}. Lights behind you: pull over or lose them.`, Math.round(mph), lim);
         return;
       }
     }
