@@ -98,6 +98,10 @@ export const CREDITS = {
   bush: 'Bushes: "Real Bush" by Salman Ramezani (sketchfab.com/Salman_3d_artist), CC BY 4.0.',
 };
 
+// St. Armands Circle: fallback centre (local metres) and radii. js/armands.js armandsPlace() fits the centre from the
+// "Saint Armands Circle" roads and only falls back to these. clear = no OSM buildings inside it, palms = no code-built palms inside it.
+export const ARMANDS = { x: 4232.33, z: 5185.23, clear: 125, palms: 100 };
+
 // Real places (lat, lon). Positions snap to the nearest road or water at load time.
 export const PLACES = {
   spawn: { ll: [27.3560, -82.6100], road: 'Gulf of Mexico Drive' },

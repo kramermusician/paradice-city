@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { xz, ISLAND_LINE } from './config.js';
 import { makeWaterMaterial } from './water.js';
+import { armandsPlace } from './armands.js';
 
 const TILE = 1000;
 const RANK = { service: 0, residential: 1, unclassified: 1, living_street: 1, footway: 0, tertiary: 2, secondary: 3, primary: 4, trunk: 4, motorway: 4 };
@@ -518,7 +519,9 @@ export class World {
   buildPalms() {
     const r = rng(9);
     const pts = [];
-    const ok = (x, z) => this.isLand(x, z) && !this.buildingAt(x, z) && !this.roadAt(x, z, 0) && this.inBounds(x, z, 100);
+    // no code-built palms within 100 m of St. Armands Circle: js/armands.js plants its own trees there
+    const ac = armandsPlace(this);
+    const ok = (x, z) => this.isLand(x, z) && !this.buildingAt(x, z) && !this.roadAt(x, z, 0) && this.inBounds(x, z, 100) && Math.hypot(x - ac.x, z - ac.z) > ac.palms;
     for (const rd of this.roads) {
       const rank = RANK[rd.k] ?? 0;
       if (rank < 2 && !(rank === 1 && r() < 0.25)) continue;

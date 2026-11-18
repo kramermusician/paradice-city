@@ -37,8 +37,9 @@ export class HUD {
         x.stroke();
       }
     }
-    x.fillStyle = 'rgba(70,60,60,0.55)';
     for (const b of w.bList) {
+      if (b.tiny) continue;   // St. Armands trunks, lamps, parked cars and statues are too small for the map
+      x.fillStyle = b.armandsBld ? 'rgba(96,66,52,0.9)' : 'rgba(70,60,60,0.55)';   // St. Armands shops and back buildings read a little stronger
       x.beginPath();
       for (let i = 0; i < b.poly.length; i += 2) x.lineTo((b.poly[i] - x0) / cell, (b.poly[i + 1] - z0) / cell);
       x.fill();

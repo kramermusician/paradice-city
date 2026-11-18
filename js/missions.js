@@ -174,6 +174,8 @@ export class Missions {
     const r = v.lastRoad;
     if (!r) return this.lastLimit || 25;
     let lim = r.limit;
+    // on the ring itself the ring's 20 wins: a spoke road runs along part of it and would otherwise post its own 25 or 30
+    if (this.G.armands && this.G.armands.onRing(v.pos.x, v.pos.z)) lim = 20;
     if (this.G.store && r.k === 'service' && Math.hypot(v.pos.x - this.G.store.cx, v.pos.z - this.G.store.cz) < 160) lim = 15;
     this.lastLimit = lim;
     return lim;

@@ -19,6 +19,7 @@ import { Bikes } from './bikes.js';
 import { BigMap } from './bigmap.js';
 import { Nav } from './nav.js';
 import { placeDadsPlace, buildDadsPlace, CanalDocks } from './dads.js';
+import { buildArmands, armandsPlace } from './armands.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
 const $ = (id) => document.getElementById(id);
@@ -214,6 +215,7 @@ function placeStoreAndWarehouse(W) {
   G.warehouse = { cx, cz, ang: 0 };
   W.exclusions.push([G.store.cx, G.store.cz, 48], [cx, cz, 40]);
   placeDadsPlace(W, G);
+  { const A = armandsPlace(W); W.exclusions.push([A.x, A.z, A.clear]); }   // St. Armands Circle: the six merged OSM blocks go, js/armands.js builds the shop ring
 }
 
 function buildSetPieces() {
@@ -247,6 +249,7 @@ function buildSetPieces() {
   // Dad's place on Cutter Lane: his house, his dock on the canal behind it (both boats, two kayaks).
   // The gold marker in the street is where a car swaps to his boat.
   buildDadsPlace(scene, W, G);
+  buildArmands(scene, W, G);   // St. Armands Circle (2026-11-16)
   if (!G.dockBoat) {   // Cutter Lane missing from the map data: fall back to the old Harbourside dock
     const [dcx, dcz] = PLACES.dockCar.xz, [dbx, dbz] = PLACES.dockBoat.xz;
     G.dockCar = { x: dcx, z: dcz }; G.dockBoat = { x: dbx, z: dbz, h: 0 }; G.dadsPlace = { x: dcx, z: dcz };
