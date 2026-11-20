@@ -173,3 +173,13 @@ Test: `PUPPETEER_PATH=../esl-3d-viz/node_modules/puppeteer node build/test/arman
 
 Tests need the ABSOLUTE puppeteer path, the relative one fails from `build/test`:
 `PUPPETEER_PATH="/Users/<you>/.../coding projects/esl-3d-viz/node_modules/puppeteer" node build/test/armands-qa1.cjs` (static overlap with asphalt, must be 0), `armands-qa7.cjs` (roof height of each collider against the visible roof), `armands-qa3.cjs audi-tt 20 4` (drive fuzz at 20 mph; the fourth argument is the smoothing number and must not be 0, or the test crashes), `armands-v2-shots.cjs <outdir>` (Graces close-up, back band, shop backs, minimap and big map). `fps.cjs` needs the port: `node build/test/fps.cjs 8915`.
+
+## Pelicans (2026-11-20)
+
+Brown pelicans in `js/pelicans.js`, hooked into `js/main.js` with three lines (import, construct after the cyclists, update each frame). Thirty birds in total, four InstancedMeshes (body, head, left wing, right wing; Lambert vertex colors, about 400 triangles a bird), so the whole flock is four draw calls and nothing outside 400 m is simulated.
+
+- Ten perch on dock pilings: the canal docks (`world.canalLots`) and Dad's dock, which gets extra weight so he usually has a few. They turn their heads now and then, and flush when a car or boat comes within 15 m, then settle on another piling 70 to 320 m away.
+- Four flocks (4 to 6 birds, V or line) glide low along the shore and bay, with a few slow flaps between long glides and stretches of skimming just above the water. A flock that gets more than about 470 m away respawns near a shoreline close to you.
+- Every 12 to 24 s one bird in a flock near you climbs, plunge-dives with a splash (reuses `G.fx.splash`), floats a moment and beats back to its place in the line.
+- Follows the Traffic toggle in the pause menu (off hides them and frees the pilings).
+- Tests: `build/test/pelicans.cjs` (counts, fps with and without) and `build/test/pelican-shots.cjs` (boat-view shots to `screenshots/pelicans-*.png`). Debug handle: `G.pelicans`.

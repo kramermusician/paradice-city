@@ -16,6 +16,7 @@ import { Radio } from './radio.js';
 import { initAudio, engine, splashSound, chime, screech, setSiren, setRotor } from './audio.js';
 import { Police } from './police.js';
 import { Bikes } from './bikes.js';
+import { Pelicans } from './pelicans.js';
 import { BigMap } from './bigmap.js';
 import { Nav } from './nav.js';
 import { placeDadsPlace, buildDadsPlace, CanalDocks } from './dads.js';
@@ -800,6 +801,7 @@ function updatePlay(dt) {
   if (areaT <= 0) { areaT = 0.5; area = world.areaName(v.pos.x, v.pos.z, v.lastRoad); }
   G.police.update(dt, v, settings.police && !G.missions.active);
   G.bikes.update(dt, v);
+  G.pelicans.update(dt, v, G.traffic.enabled);
   const limit = v.kind === 'boat' || v.kind === 'air' ? null : G.missions.limitAt(v);
   const marks = G.missions.minimapMarkers().concat(G.police.minimapMarkers());
   if (G.waypoint) marks.push({ x: G.waypoint.x, z: G.waypoint.z, color: '#ff4fd8', big: true, letter: 'X' });
@@ -884,6 +886,7 @@ async function boot() {
     G.nav = new Nav(scene, world);
     G.police = new Police(scene, world, G);
     G.bikes = new Bikes(scene, world);
+    G.pelicans = new Pelicans(scene, world, G);
     G.bigmap = new BigMap(G);
     showSettings();
     G.radio = new Radio((m) => G.hud.toast(m, 3));
