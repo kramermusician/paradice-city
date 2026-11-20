@@ -1,15 +1,18 @@
 {
-  "note": "Kramer's own recordings for Longboat Key: Paradise City. Drop each as NN.mp3 beside this file. Slots 06 to 10 are still open.",
+  "station": "Dad Radio",
+  "note": "Dad's songs, copied from ~/Dropbox/Dad Songs/ as NN.mp3 beside this file. The mp3s are gitignored and never go to the public site; the radio plays only from a local copy (run.sh or the family package). Kramer's own covers can be added as more entries with \"cover\": true.",
   "tracks": [
-    {"slot": 1, "file": "01.mp3", "title": "Paradise City", "original": "Guns N' Roses"},
-    {"slot": 2, "file": "02.mp3", "title": "(Sittin' On) The Dock of the Bay", "original": "Otis Redding"},
-    {"slot": 3, "file": "03.mp3", "title": "Seven Nation Army", "original": "The White Stripes"},
-    {"slot": 4, "file": "04.mp3", "title": "Behind Blue Eyes", "original": "The Who"},
-    {"slot": 5, "file": "05.mp3", "title": "Bastille Day", "original": "Rush"},
-    {"slot": 6, "file": "06.mp3", "title": "", "original": ""},
-    {"slot": 7, "file": "07.mp3", "title": "", "original": ""},
-    {"slot": 8, "file": "08.mp3", "title": "", "original": ""},
-    {"slot": 9, "file": "09.mp3", "title": "", "original": ""},
-    {"slot": 10, "file": "10.mp3", "title": "", "original": ""}
+    {"slot": 1, "file": "01.mp3", "title": "Paradise City", "artist": "Guns N' Roses"},
+    {"slot": 2, "file": "02.mp3", "title": "Ain't Talkin' 'bout Love", "artist": "Van Halen"},
+    {"slot": 3, "file": "03.mp3", "title": "Peaches", "artist": "The Presidents of the United States of America"},
+    {"slot": 4, "file": "04.mp3", "title": "Bastille Day", "artist": "Rush"},
+    {"slot": 5, "file": "05.mp3", "title": "The Trees", "artist": "Rush"},
+    {"slot": 6, "file": "06.mp3", "title": "Behind Blue Eyes", "artist": "The Who"},
+    {"slot": 7, "file": "07.mp3", "title": "Pinball Wizard", "artist": "The Who"},
+    {"slot": 8, "file": "08.mp3", "title": "Tom Sawyer", "artist": "Rush"},
+    {"slot": 9, "file": "09.mp3", "title": "Baba O'Riley", "artist": "The Who"},
+    {"slot": 10, "file": "10.mp3", "title": "Panama", "artist": "Van Halen"},
+    {"slot": 11, "file": "11.mp3", "title": "Sweet Child O' Mine", "artist": "Guns N' Roses"},
+    {"slot": 12, "file": "12.mp3", "title": "Lump", "artist": "The Presidents of the United States of America"}
   ]
 }
