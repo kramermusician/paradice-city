@@ -444,8 +444,11 @@ export class World {
             }
             if (!ok || this.buildingAt(cx, cz) || this.roadAt(cx, cz, 0)) continue;
             if (this.exclusions.some(([ex, ez, er]) => (cx - ex) ** 2 + (cz - ez) ** 2 < er * er)) continue;
-            const idx = this.addCollider(poly, r() < 0.3 ? 6.8 : 3.8 + r() * 0.8);
-            this.bList[idx].hip = true;
+            let hh = r() < 0.3 ? 6.8 : 3.8 + r() * 0.8;
+            const lbk = /^(Cutter|Channel) Lane$/.test(rd.n || '');   // Street View: single-storey white houses, pale metal roofs
+            if (lbk) hh = 3.4 + (hh % 1) * 0.6;
+            const idx = this.addCollider(poly, hh);
+            this.bList[idx].hip = true; if (lbk) this.bList[idx].lbk = true;
             n++;
             // canal-front lot? walk out the back of the house to the seawall (bay side only, no Gulf beach docks)
             const nx = -tz * side, nz = tx * side;
@@ -479,7 +482,8 @@ export class World {
       let area = 0;
       for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += p[i * 2] * p[j * 2 + 1] - p[j * 2] * p[i * 2 + 1]; }
       const flip = area > 0;
-      const wc = walls[Math.floor(r() * walls.length)];
+      let wc = walls[Math.floor(r() * walls.length)];
+      if (b.lbk) wc = [0.97, 0.96, 0.92];
       const rc = h > 12 ? roofs[2 + Math.floor(r() * 2)] : roofs[Math.floor(r() * 3)];
       let u = 0;
       for (let i = 0; i < n; i++) {
@@ -491,7 +495,8 @@ export class World {
         u += len;
       }
       if (b.hip) {
-        const rcol = [[0.72, 0.4, 0.28], [0.62, 0.34, 0.26], [0.8, 0.78, 0.72], [0.45, 0.5, 0.55]][Math.floor(r() * 4)];
+        let rcol = [[0.72, 0.4, 0.28], [0.62, 0.34, 0.26], [0.8, 0.78, 0.72], [0.45, 0.5, 0.55]][Math.floor(r() * 4)];
+        if (b.lbk) rcol = [0.8, 0.82, 0.82];
         const ridge = 2.2;
         const cxr = (p[0] + p[2] + p[4] + p[6]) / 4, czr = (p[1] + p[3] + p[5] + p[7]) / 4;
         // ridge along the long axis (edge 0-1)

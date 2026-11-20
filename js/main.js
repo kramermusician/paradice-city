@@ -21,6 +21,7 @@ import { BigMap } from './bigmap.js';
 import { Nav } from './nav.js';
 import { placeDadsPlace, buildDadsPlace, CanalDocks } from './dads.js';
 import { buildArmands, armandsPlace } from './armands.js';
+import { buildStreetView } from './streetview.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
 const $ = (id) => document.getElementById(id);
@@ -254,6 +255,7 @@ function buildSetPieces() {
   // The gold marker in the street is where a car swaps to his boat.
   buildDadsPlace(scene, W, G);
   buildArmands(scene, W, G);   // St. Armands Circle (2026-11-16)
+  if (!params.has("nosv")) buildStreetView(scene, W, G);   // Street View pass (2026-11-20): bridge, Gulf of Mexico Drive, Cutter Lane
   if (!G.dockBoat) {   // Cutter Lane missing from the map data: fall back to the old Harbourside dock
     const [dcx, dcz] = PLACES.dockCar.xz, [dbx, dbz] = PLACES.dockBoat.xz;
     G.dockCar = { x: dcx, z: dcz }; G.dockBoat = { x: dbx, z: dbz, h: 0 }; G.dadsPlace = { x: dcx, z: dcz };
