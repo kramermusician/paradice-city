@@ -96,6 +96,7 @@ export const CREDITS = {
   turtle: 'Sea turtles: "Sea Turtle" by C.J..Goldman (sketchfab.com/C.J..Goldman), CC BY 4.0. Decimated.',
   palms: 'Palm trees up close: "Stylized Palm tree set" by Parelaxel (sketchfab.com/parelaxel), CC BY 4.0.',
   bush: 'Bushes: "Real Bush" by Salman Ramezani (sketchfab.com/Salman_3d_artist), CC BY 4.0.',
+  plane: 'Stunt plane: "Extra 330sc - Aerobatic Aircraft" by PODSHOOT (sketchfab.com/3d-models/extra-330sc-aerobatic-aircraft-bf7133064c934c3fa38834f22dbdbf96), CC BY 4.0. Decimated.',
 };
 
 // St. Armands Circle: fallback centre (local metres) and radii. js/armands.js armandsPlace() fits the centre from the

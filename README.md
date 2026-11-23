@@ -91,6 +91,16 @@ Drive into a glowing marker to start one, or pick it in the pause menu to jump t
 - OSM has few house footprints on the key, so residential streets are lined with simple generated houses. Real footprints are used wherever OSM has them. The grocery store sits on its real OSM footprint (27.3673, -82.6244).
 - Speed limits: OSM `maxspeed` where tagged (45 on most of Gulf of Mexico Drive, 35 near New Pass), with game values for St. Armands Circle (20), Bay Isles Parkway (25) and the store lot (15), per `research/longboat-key-asset-research-2026-11-12.md`.
 
+## Birthday opening (2026-11-22)
+
+For Dad's birthday (Nov 26). The first drive after load now starts on the Ringling causeway bridge, climbing toward downtown Sarasota with the bay on both sides, in a clear morning (sun 24 degrees up at bearing 115; above 6 degrees `G.setSun` blends the sky to blue, so Sunset Run's colours are unchanged). `?spawn=newpass` gives the 2026-11-18 New Pass start, `?spawn=key` the Gulf of Mexico Drive start. The New Pass start was tried for the opening too, but its road turns off the view of the sky.
+
+- About 1 s in, the Extra 330sc stunt plane (`js/skywriter.js`) dives from behind and above, passes low beside the car with a whoosh (`whoosh()` in js/audio.js), then climbs straight ahead.
+- From about 5 s to 12.6 s it writes HAPPY BIRTHDAY over DAD in white smoke on a vertical plane 1.7 km ahead of the spawn, facing the spawn heading. Letters are a small stroke font of polylines; the plane flies one path through every stroke (pen up between strokes) far faster than a real plane, dropping a smoke puff every 2.2 m. The smoke is one instanced billboard draw call; puffs grow, drift up and fade out over about 75 s.
+- The plane then climbs off to the right and is gone by 19 s. Speeding stops are held off while it writes. It runs only on the first drive after load, never after a vehicle change. `?nointro=1` skips it.
+- Model: `build/prep_stunt_plane.py` (Blender) makes the full copy `Owner's Inbox/3D Library/vehicles/extra-330sc-2026-11-22.glb` (with its library.json entry) and the web copy `assets/props/stunt-plane.glb` (about 1 MB, body plus a separate prop that spins). The download in Dropbox is never modified.
+- Screenshots: `node build/test/opening.cjs [spawn] [prefix]` writes `screenshots/opening-*.png` at 2, 5, 8, 12 and 15 s plus the close pass, holding the throttle.
+
 ## Licenses and credits
 
 Also shown in game under Esc, Credits.
@@ -103,6 +113,7 @@ Also shown in game under Esc, Credits.
 - "2004 Audi TT Coupe 3.2 Quattro" by OUTPISTON (sketchfab.com/outpiston), CC BY-NC-SA 4.0. Repainted silver, decimated.
 - Dropbox set (2026-11-13), all from Sketchfab: "Jet Ski (RWB)" by KnightOwl, CC BY 4.0. "2014 Bugatti Veyron Legend Ettore Bugatti", "LEGO Technic Chevrolet Corvette Stingray 42205" and "2018 Ford Mustang Cobra Jet" by Ddiaz Design, CC BY-NC-SA 4.0. "Porsche 911 GT3" by ChevroletSS, CC BY 4.0. "1970 Pontiac Firebird Trans Am" by everhard, CC BY 4.0. "Rolls Royce Spectre" by iSteven, CC BY-NC-SA 4.0. "2022 Rolls-Royce Phantom Extended Series II" by ig.ghazigfx, CC BY 4.0. "2022 Subaru Outback" by tonielpro520, CC BY 4.0. "Low Poly Fire Truck" by jg-3d, CC BY 4.0. "Area 9 Golf Cart" by maxdragonn, CC BY 4.0. "Ford Explorer Police" by Megarobloxfr, CC BY 4.0. "Frickie's Yacht" by KurumA, CC BY-NC 4.0. "LNG Ship" by KoreanNavy, CC BY 4.0. "Sea Turtle" by C.J..Goldman, CC BY 4.0. "Stylized Palm tree set" by Parelaxel, CC BY 4.0. "Real Bush" by Salman Ramezani, CC BY 4.0. All decimated.
 - "Lucid Air Sapphire (2024)" by geyges, Sketchfab Standard license. That license does not allow handing out the file, so `assets/cars/lucid-air.glb` is gitignored and the car only appears when the game runs on localhost.
+- Stunt plane: "Extra 330sc - Aerobatic Aircraft" by PODSHOOT (https://sketchfab.com/3d-models/extra-330sc-aerobatic-aircraft-bf7133064c934c3fa38834f22dbdbf96), CC BY 4.0. Decimated.
 - Kramer's 2024 Subaru Outback XT: his own phone scan (smoothed copy, decimated).
 - Dad's boat (Grady-White 216 shape), his bigger boat (a generic 33 ft center console until we know the real one) and the pedal kayaks: built in Blender for this project from family photos, original. Scripts in `build/boats/`.
 - Jetpack, player helicopter, fighter jet, cyclists, police cruisers, truck, trailer, crates, golf carts, police SUV, helicopters, store, warehouse, signs, freezer set, traffic cars, traffic boats: built in code here, original.

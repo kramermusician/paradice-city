@@ -104,3 +104,18 @@ export function screech(level) {
     tire.f2.frequency.setTargetAtTime(2050 + level * 600, t, 0.1);
   }
 }
+
+// Fly-by whoosh for the stunt plane (2026-11-22): noise swept through a band filter, loud then fading.
+export function whoosh() {
+  if (!ctx) return;
+  const len = ctx.sampleRate * 1.6, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const s = ctx.createBufferSource(); s.buffer = buf;
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+  const t = ctx.currentTime;
+  f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(1800, t + 0.7); f.frequency.exponentialRampToValueAtTime(300, t + 1.6);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.6, t + 0.7); g.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
+  const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(110, t + 1.6);
+  const og = ctx.createGain(); og.gain.value = 0.18;
+  s.connect(f); f.connect(g); o.connect(og); og.connect(g); g.connect(master); s.start(t); o.start(t); o.stop(t + 1.6);
+}

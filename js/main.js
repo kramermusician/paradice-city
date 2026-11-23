@@ -13,7 +13,7 @@ import { loadProps, Turtles, Flora } from './props.js';
 import { Particles } from './effects.js';
 import { input } from './input.js';
 import { Radio } from './radio.js';
-import { initAudio, engine, splashSound, chime, screech, setSiren, setRotor } from './audio.js';
+import { initAudio, engine, whoosh, splashSound, chime, screech, setSiren, setRotor } from './audio.js';
 import { Police } from './police.js';
 import { Bikes } from './bikes.js';
 import { Pelicans } from './pelicans.js';
@@ -22,11 +22,12 @@ import { Nav } from './nav.js';
 import { placeDadsPlace, buildDadsPlace, CanalDocks } from './dads.js';
 import { buildArmands, armandsPlace } from './armands.js';
 import { buildStreetView } from './streetview.js';
+import { SkyWriter } from './skywriter.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const G = window.G = { input, time: 0, paused: false, defaultSun: 4.5, defaultAz: 115, camMode: 0, THREE };
+const G = window.G = { input, time: 0, paused: false, defaultSun: 24, defaultAz: 115, camMode: 0, THREE };
 
 // settings that stick between visits (pause menu, Settings)
 const CAM_NAMES = ['Chase', 'Driver', 'Overhead'];
@@ -109,6 +110,26 @@ G.setSun = (el, azDeg = G.defaultAz) => {
   waterUniforms.uSunDir.value.copy(sunDir);
   waterUniforms.uSkyColor.value.setRGB(0.95, 0.5 + 0.15 * k, 0.42 + 0.1 * k);
   waterUniforms.uSunColor.value.setRGB(1.0, 0.45 + 0.25 * k, 0.2 + 0.15 * k);
+  // Clear morning (2026-11-22): above 6 degrees the sky blends from the sunrise pinks to a clean blue.
+  // Sunset Run stays at 6 and below, so its colours are unchanged.
+  const b = THREE.MathUtils.clamp((el - 6) / 12, 0, 1);
+  if (b > 0) {
+    const mixC = (c, r, g, bl) => c.lerp(new THREE.Color(r, g, bl), b);
+    for (const s of [sky, envSky]) {
+      const u = s.material.uniforms;
+      u.uZenith.value.setRGB(0.10, 0.12, 0.30).lerp(new THREE.Color(0.16, 0.40, 0.86), b);
+      mixC(u.uMid.value, 0.42, 0.66, 0.96); mixC(u.uHorizon.value, 0.80, 0.89, 0.99);
+      u.uAway.value.setRGB(0.62, 0.45, 0.55).lerp(new THREE.Color(0.70, 0.83, 0.97), b);
+      u.uSunCol.value.setRGB(1.0, 0.6, 0.3).lerp(new THREE.Color(1.0, 0.95, 0.85), b);
+      u.uBright.value = 0.9 + 0.1 * b;
+    }
+    sun.color.lerp(new THREE.Color(1.0, 0.97, 0.9), b);
+    mixC(fogColor, 0.74, 0.84, 0.95); scene.fog.color.copy(fogColor); waterUniforms.uFogColor.value.copy(fogColor);
+    mixC(waterUniforms.uSkyColor.value, 0.45, 0.68, 0.92); mixC(waterUniforms.uSunColor.value, 1.0, 0.92, 0.8);
+  } else for (const s of [sky, envSky]) {
+    const u = s.material.uniforms;
+    u.uZenith.value.setRGB(0.10, 0.12, 0.30); u.uAway.value.setRGB(0.62, 0.45, 0.55); u.uSunCol.value.setRGB(1.0, 0.6, 0.3);
+  }
   if (turned || Math.abs(el - envEl) > 1.2) {
     envEl = el;
     if (envRT) envRT.dispose();
@@ -636,10 +657,24 @@ async function startDrive() {
   G.started = true;
   updateCamera(0.016, true);
 }
-// Opening shot (Kramer, 2026-11-18): coming down off the New Pass bridge from Longboat Key at sunrise,
-// headed for St. Armands Circle and on to downtown Sarasota. ?spawn=key puts you back on Gulf of Mexico Drive.
+// Opening shot. Birthday opening (2026-11-22): rolling up the Ringling causeway bridge toward downtown
+// Sarasota in a clear morning, bay on both sides, the stunt plane writing overhead (js/skywriter.js).
+// ?spawn=newpass: the 2026-11-18 start, coming down off the New Pass bridge toward St. Armands.
+// ?spawn=key: the old Gulf of Mexico Drive start.
+function deckPose(name, minB, frac, wantEast) {
+  const decks = world.roads.filter((r) => r.n === name && r.b >= minB);
+  if (!decks.length) return null;
+  let p = decks[0].p, n = p.length / 3;
+  for (const d of decks) { const q = d.p, m = q.length / 3; if ((q[(m - 1) * 3] > q[0]) === wantEast) { p = q; n = m; break; } }
+  const fwd = (p[(n - 1) * 3] > p[0]) === wantEast;
+  const at = (k) => fwd ? k : n - 1 - k, i = at(Math.floor(n * frac)), j = at(Math.floor(n * frac) + 1);
+  const x = p[i * 3], z = p[i * 3 + 1], y = p[i * 3 + 2];
+  return { x, z, y, h: Math.atan2(-(p[j * 3 + 1] - z), p[j * 3] - x) };
+}
 function startPose() {
-  if (params.get('spawn') !== 'key') {
+  const k = params.get('spawn') || 'ringling';
+  if (k === 'ringling') { const s = deckPose('John Ringling Boulevard', 15, 0.22, true); if (s) return s; }
+  if (k === 'newpass') {
     const deck = world.roads.find((r) => r.n === 'John Ringling Parkway' && r.b);
     if (deck) {
       const p = deck.p, n = p.length / 3;
@@ -709,7 +744,7 @@ $('btnPolice').onclick = () => { settings.police = !settings.police; saveSetting
 function fillCredits() {
   const seen = new Set();
   $('creditList').innerHTML = VEHICLES.filter((v) => !seen.has(v.credit) && seen.add(v.credit)).map((v) => `<li><b>${v.name}</b>: ${CREDITS[v.credit]}</li>`).join('')
-    + ['police', 'yacht', 'lng', 'turtle', 'palms', 'bush'].map((k) => `<li>${CREDITS[k]}</li>`).join('');
+    + ['police', 'yacht', 'lng', 'turtle', 'palms', 'bush', 'plane'].map((k) => `<li>${CREDITS[k]}</li>`).join('');
 }
 
 // ---------------------------------------------------------------- map target (dropped on the big map)
@@ -842,6 +877,12 @@ function frame(now) {
   if (G.radio && G.mode === 'play') { if (input.radioNext) G.radio.step(1); if (input.radioPrev) G.radio.step(-1); }
   if (G.hud && G.hud.cardOpen() && input.confirm && G.hud.cardButtons) { const [, fn] = G.hud.cardButtons[0]; G.hud.closeCard(); G.onCardClose && G.onCardClose(); G.onCardClose = null; fn(); }
   if (!G.active) return;
+  // Birthday opening: the first drive after load (not after vehicle changes); ?nointro=1 skips it.
+  if (G.sky && G.mode === 'play' && !G.skyStarted && G.active.kind === 'car') {
+    G.skyStarted = true;
+    if (!params.has('nointro') && (!params.has('shot') || params.has('intro'))) G.sky.start(G.active.pos.x, G.active.pos.z, G.active.y || 0, G.active.heading, G.active);
+  }
+  if (G.sky) G.sky.update(G.paused ? 0 : dt, G.time, whoosh);
   for (const p of Object.values(G.fx)) { p.update(dt); p.setScale(innerHeight); }
   const ap = G.active.pos;
   sun.position.set(ap.x + sunDir.x * 300, Math.max(40, sunDir.y * 300 + 60), ap.z + sunDir.z * 300);
@@ -892,6 +933,7 @@ async function boot() {
     G.bigmap = new BigMap(G);
     showSettings();
     G.radio = new Radio((m) => G.hud.toast(m, 3));
+    G.sky = new SkyWriter(scene, { fixMaterial: G.fixMaterial });
     G.radio.load();
     fillCredits();
     buildSelectList();
@@ -950,6 +992,8 @@ async function autoShot(what) {
     const r = world.nearestRoadPoint(c.A.x, c.A.z, { ground: true });
     v.place(r.x - Math.cos(r.heading) * 40, r.z + Math.sin(r.heading) * 40, r.heading, 0);
     v.vel.set(Math.cos(r.heading) * 8, -Math.sin(r.heading) * 8);
+  } else if (what === 'opening') {
+    // the real first drive: no overrides
   } else if (what === 'intro') {
     G.startIntro(async () => {});
   }

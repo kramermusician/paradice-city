@@ -147,6 +147,7 @@ export class Police {
     if (this.patrol.copHit) { const c = this.patrol.copHit; this.patrol.copHit = null; this.start(c, `You bumped a ${this.agencyName(c.m)} car. Lights are on.`); return; }
     // speeding near a cruiser or a trap
     if (!v.lastRoad) return;
+    if (G.sky && G.sky.on) return; // no speeding stops while the birthday plane is writing
     const mph = Math.abs(v.speed) * MPH, lim = G.missions.limitAt(v);
     if (mph < lim + OVER) { this.overT = 0; return; }
     this.overT = (this.overT || 0) + dt;
