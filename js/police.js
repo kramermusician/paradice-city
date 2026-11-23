@@ -142,6 +142,8 @@ export class Police {
     this.record(v);
     this.ambient(dt, v);
     if (this.chase) { this.updChase(dt, v); return; }
+    // first minute of driving after load: no stops at all, so the birthday opening plays in peace
+    this.calmT = (this.calmT || 0) + dt; if (this.calmT < 60) { this.patrol.copHit = null; return; }
     if (this.cooldown > 0) { this.patrol.copHit = null; return; }
     // bumped a cruiser
     if (this.patrol.copHit) { const c = this.patrol.copHit; this.patrol.copHit = null; this.start(c, `You bumped a ${this.agencyName(c.m)} car. Lights are on.`); return; }
