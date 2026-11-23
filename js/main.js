@@ -22,6 +22,7 @@ import { Nav } from './nav.js';
 import { placeDadsPlace, buildDadsPlace, CanalDocks } from './dads.js';
 import { buildArmands, armandsPlace } from './armands.js';
 import { buildStreetView } from './streetview.js';
+import { hookTowers, buildCauseway } from './causeway.js';
 import { SkyWriter } from './skywriter.js';
 import { makeStore, makeWarehouse, makeDock, makeMarker, makeFreezerSet, makeForklift, makeTractor, makeTrailer, rectPoly } from './models.js';
 
@@ -277,6 +278,7 @@ function buildSetPieces() {
   buildDadsPlace(scene, W, G);
   buildArmands(scene, W, G);   // St. Armands Circle (2026-11-16)
   if (!params.has("nosv")) buildStreetView(scene, W, G);   // Street View pass (2026-11-20): bridge, Gulf of Mexico Drive, Cutter Lane
+  if (!params.has("nocw")) buildCauseway(scene, W, G);   // Causeway pass (2026-11-23): downtown towers, Ringling bridge, causeway park
   if (!G.dockBoat) {   // Cutter Lane missing from the map data: fall back to the old Harbourside dock
     const [dcx, dcz] = PLACES.dockCar.xz, [dbx, dbz] = PLACES.dockBoat.xz;
     G.dockCar = { x: dcx, z: dcz }; G.dockBoat = { x: dbx, z: dbz, h: 0 }; G.dadsPlace = { x: dcx, z: dcz };
@@ -911,6 +913,7 @@ document.addEventListener('drive', () => startDrive());
 async function boot() {
   try {
     world.beforeBuildings = placeStoreAndWarehouse;
+    if (!params.has('nocw')) hookTowers(world);
     const propsReady = loadProps();
     await world.load(scene, setLoad);
     setLoad('Unloading the yachts');
