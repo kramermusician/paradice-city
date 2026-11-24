@@ -675,7 +675,9 @@ function deckPose(name, minB, frac, wantEast) {
 }
 function startPose() {
   const k = params.get('spawn') || 'ringling';
-  if (k === 'ringling') { const s = deckPose('John Ringling Boulevard', 15, 0.22, true); if (s) return s; }
+  // 2026-11-23: start on the Sarasota side of the Ringling Bridge, heading west toward St. Armands and Longboat Key
+  if (k === 'ringling') { const s = deckPose('John Ringling Boulevard', 15, 0.2, false); if (s) return s; }
+  if (k === 'downtown') { const s = deckPose('John Ringling Boulevard', 15, 0.22, true); if (s) return s; }
   if (k === 'newpass') {
     const deck = world.roads.find((r) => r.n === 'John Ringling Parkway' && r.b);
     if (deck) {
