@@ -14,6 +14,7 @@
   #radioTag { position: absolute; right: 30px; top: 62px; font-size: 14px; opacity: .8; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
   #loading h1 { font-size: 64px; margin: 0; letter-spacing: 2px; text-shadow: 0 3px 14px rgba(0,0,0,.35); }
   #loading p { opacity: .9; font-size: 18px; }
+  #loading p.next { font-size: 16px; opacity: .7; margin-top: 0; }
   .title-sub { font-size: 20px; opacity: .85; margin-top: 6px; }
   #select { position: fixed; inset: 0; display: none; pointer-events: none; z-index: 20; }
   #select .panel { pointer-events: auto; width: 330px; margin: 28px; background: rgba(20,18,30,.62); border-radius: 18px; padding: 18px; backdrop-filter: blur(6px); align-self: flex-start; max-height: calc(100% - 56px); overflow: auto; }
@@ -21,6 +22,9 @@
   #selHint b { color: #ff7ab6; }
   #select h1 { margin: 0 0 4px; font-size: 32px; }
   #select .sub { opacity: .8; margin-bottom: 14px; font-size: 14px; }
+  #select .steps { margin: 8px 0 8px; padding-left: 22px; font-size: 16px; line-height: 1.45; }
+  #select .steps b { color: #ffb46e; }
+  #driveTip { font-size: 15px; opacity: .85; margin-top: 10px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
   #vlist button { display: flex; justify-content: space-between; align-items: baseline; width: 100%; margin: 4px 0; padding: 11px 14px; border: 0; border-radius: 10px; background: rgba(255,255,255,.08); color: #fff; text-align: left; }
   #vlist button:hover { background: rgba(255,255,255,.18); }
   #vlist button.on { background: #ffb46e; color: #2a1a10; }
@@ -52,7 +56,14 @@
   #hold { display: none; position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); width: 220px; height: 10px; background: rgba(255,255,255,.3); border-radius: 5px; overflow: hidden; }
   #hold div { height: 100%; background: #ffd34d; width: 0; }
   #osm { position: absolute; right: 8px; bottom: 4px; font-size: 11px; opacity: .7; }
-  #keys { position: absolute; left: 250px; bottom: 24px; font-size: 12px; opacity: .65; line-height: 1.5; }
+  #keys { position: absolute; left: 250px; right: 262px; bottom: 22px; font-size: 13px; line-height: 2; text-shadow: 0 1px 6px rgba(0,0,0,.7); }
+  #keys span { white-space: nowrap; margin-right: 12px; opacity: .9; }
+  #keys kbd { font: inherit; font-weight: 700; background: rgba(15,12,25,.6); border: 1px solid rgba(255,255,255,.35); border-radius: 5px; padding: 1px 6px; margin-right: 4px; }
+  #brief { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(760px, 78vw); background: rgba(15,12,25,.8); border: 2px solid #ffe04d; padding: 14px 24px; border-radius: 18px; font-size: 21px; line-height: 1.4; text-align: center; opacity: 0; transition: opacity .6s; }
+  #brief.show { opacity: 1; }
+  #brief b { color: #ffe04d; }
+  #brief small { display: block; font-size: 15px; opacity: .85; margin-top: 6px; }
+  #mission small { display: block; opacity: .85; font-size: 14px; margin-top: 4px; }
   #card { display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(22,18,32,.92); padding: 26px 34px; border-radius: 20px; z-index: 40; text-align: center; min-width: 360px; max-width: 560px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   #card h2 { margin: 0 0 10px; font-size: 32px; color: #ffb46e; }
   #card .body { font-size: 18px; line-height: 1.5; margin-bottom: 18px; }
@@ -89,13 +100,14 @@
 </script>
 </head>
 <body>
-<div id="loading"><img src="assets/branding/logo-paradice-city.png" alt="Longboat Key: Paradice City"><div class="title-sub">Happy birthday, Dad</div><p id="loadmsg">Loading</p></div>
+<div id="loading"><img src="assets/branding/logo-paradice-city.png" alt="Longboat Key: Paradice City"><div class="title-sub">Happy birthday, Dad</div><p id="loadmsg">Loading</p><p class="next">Next: choose your ride, then drive home.</p></div>
 
 <div id="select">
-  <div id="selHint">Choose your ride, then press <b>Drive</b></div>
+  <div id="selHint"><b>Choose your ride</b>, then press <b>Drive</b></div>
   <div class="panel">
-    <h1>Paradice City</h1>
-    <div class="sub">Pick a ride. Up and down to browse, Enter to drive. Press V while driving to come back here.</div>
+    <h1>Choose your ride</h1>
+    <ol class="steps"><li>Click a vehicle in this list, or use the Up and Down arrows.</li><li>Press <b>Drive</b> at the bottom of the screen, or Enter.</li></ol>
+    <div class="sub">You can change later: press V while driving.</div>
     <div id="vlist"></div>
     <button id="selBack">Back to the road (V or Esc)</button>
   </div>
@@ -103,12 +115,14 @@
     <div id="vname"></div><div id="vyear"></div><div id="vcredit"></div>
     <div id="vload">Loading model</div>
     <button id="drive" onclick="document.dispatchEvent(new Event('drive'))">Drive</button>
+    <div id="driveTip"></div>
   </div>
 </div>
 
 <div id="hud">
   <canvas id="minimap" width="210" height="210"></canvas>
-  <div id="keys">Arrows or W/S/A/D, or triggers and stick: drive and steer. Space: handbrake (flying: up; Shift: down). C: camera. E: boat swap, pull traps. V: change vehicle. M or click the map: big map. Q/R: radio. Esc: menu</div>
+  <div id="keys"></div>
+  <div id="brief"></div>
   <div id="radioTag"></div>
   <div id="limit">SPEED LIMIT<span id="limitNum">45</span></div>
   <div id="alt">ALT<b id="altNum">0</b>FT</div>
@@ -128,24 +142,28 @@
   <canvas id="bigmapCanvas"></canvas>
   <div class="bar"><button id="bmIn">Zoom in</button><button id="bmOut">Zoom out</button><button id="bmMe">Find me</button><button id="bmClear">Clear target</button><button id="bmClose" class="go">Back to driving</button></div>
   <div id="bmArea"></div>
-  <div class="help">Scroll to zoom, drag to move, click to drop a target. Right-click clears it. M or Esc closes.</div>
+  <div class="help">Click anywhere to drop a target, then follow the road arrows to it. Scroll zooms, drag moves, right-click clears. M or Esc goes back to driving.</div>
 </div>
 <div id="introText"><b>Sarasota Cold Storage</b><br>minus 10 F, lights low. The robots are loading your cranberries.<br><small>press any key to skip</small></div>
 
 <div id="menu"><div class="box">
   <h2>Paused</h2>
+  <p id="menuNow" style="margin:0 0 12px;font-size:17px;color:#ffe04d"></p>
+  <p style="opacity:.8;font-size:15px;margin:0 0 10px">Resume goes back to driving. Esc or P does the same.</p>
   <button class="m" id="btnResume">Resume</button>
   <button class="m" id="btnVehicle">Change vehicle</button>
   <button class="m" id="btnCredits">Credits</button>
   <h2 style="margin-top:20px">Settings</h2>
+  <p style="opacity:.8;font-size:15px;margin:0 0 8px">Click a setting to change it.</p>
   <button class="m" id="btnArrows">Road arrows: on</button>
   <button class="m" id="btnCamera">Camera: Chase</button>
   <button class="m" id="btnTraffic">Traffic: on</button>
   <button class="m" id="btnPolice">Police patrols: on</button>
   <button class="m" id="btnEngine">Engine sound: normal</button>
   <h2 style="margin-top:20px">Missions</h2>
+  <p style="opacity:.8;font-size:15px;margin:0 0 8px">Click a mission to jump to its start. On the road, driving into a glowing marker starts it too.</p>
   <div id="menuMissions"></div>
-  <p style="opacity:.75;font-size:14px">Drive into a glowing marker to start a mission. Dad's boat is tied up on the bay side of Longboat Key off Harbourside Drive: drive to the white marker and press E.</p>
+  <p style="opacity:.75;font-size:14px">Dad's boat is tied up behind his house on Cutter Lane: drive to the gold "Dad's place" marker and press E.</p>
 </div></div>
 
 <div id="credits">

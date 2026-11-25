@@ -37,30 +37,6 @@ export function canvasTex(w, h, draw) {
   return t;
 }
 
-// ---------------------------------------------------------------- pinwheel antenna
-export function makePinwheel() {
-  const g = new THREE.Group();
-  const pole = cyl(0.012, 0.7, L(0x333333), 0, 0.35, 0, 'y', 5);
-  g.add(pole);
-  const hub = new THREE.Group();
-  hub.position.set(0.03, 0.72, 0);
-  const cols = [0xff3b6b, 0xffc93c, 0x2ec4b6, 0x3d7dff];
-  for (let i = 0; i < 4; i++) {
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0); shape.lineTo(0.13, 0.02); shape.lineTo(0.02, 0.15); shape.lineTo(0, 0);
-    const blade = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshLambertMaterial({ color: cols[i], side: THREE.DoubleSide, emissive: cols[i], emissiveIntensity: 0.25 }));
-    blade.rotation.y = Math.PI / 2;
-    const holder = new THREE.Group();
-    holder.rotation.x = i * Math.PI / 2;
-    holder.add(blade);
-    hub.add(holder);
-  }
-  hub.add(new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 4), L(0xffffff)));
-  g.add(hub);
-  g.userData.hub = hub;
-  return g;
-}
-
 // ---------------------------------------------------------------- mission marker
 export function makeMarker(color = 0xffb347, label = '') {
   const g = new THREE.Group();

@@ -104,7 +104,7 @@ export class BigMap {
       ctx.stroke();
     }
     // places and missions
-    const marks = G.missions.minimapMarkers().concat(G.police.minimapMarkers());
+    const marks = G.missions.minimapMarkers().concat(G.police.minimapMarkers(), G.home.minimapMarkers());
     for (const m of marks) {
       const [sx, sy] = this.toScreen(m.x, m.z);
       ctx.fillStyle = m.color || '#ffb347'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;

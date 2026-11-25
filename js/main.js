@@ -15,6 +15,7 @@ import { input } from './input.js';
 import { Radio } from './radio.js';
 import { initAudio, engine, whoosh, splashSound, chime, screech, setSiren, setRotor, setVoice, setEngineVolume, level } from './audio.js';
 import { Police } from './police.js';
+import { placeStops, buildStops, HomeTrip } from './stops.js';
 import { Bikes } from './bikes.js';
 import { Pelicans } from './pelicans.js';
 import { BigMap } from './bigmap.js';
@@ -249,6 +250,7 @@ function placeStoreAndWarehouse(W) {
   G.warehouse = { cx, cz, ang: 0 };
   W.exclusions.push([G.store.cx, G.store.cz, 48], [cx, cz, 40]);
   placeDadsPlace(W, G);
+  placeStops(W);   // Mobil on Longboat Key and the bait shop by Mote (js/stops.js)
   { const A = armandsPlace(W); W.exclusions.push([A.x, A.z, A.clear]); }   // St. Armands Circle: the six merged OSM blocks go, js/armands.js builds the shop ring
 }
 
@@ -293,6 +295,7 @@ function buildSetPieces() {
     dock.position.set(dcx + 6, 0, dcz + 3.5); dock.rotation.y = Math.atan2(-(dbz - dcz), dbx - dcx);
     scene.add(dock);
   }
+  buildStops(scene, W, G);
   G.dockMarker = makeMarker(0xffd34d, "Dad's place");
   G.dockMarker.position.set(G.dockCar.x, 0, G.dockCar.z);
   G.dockMarker.scale.set(0.6, 0.5, 0.6);
@@ -305,12 +308,23 @@ async function getVehicle(id) {
   if (!G.vehicles[id]) G.vehicles[id] = await createVehicle(VEHICLES.find((v) => v.id === id));
   return G.vehicles[id];
 }
+// The controls line at the bottom of the screen, for the vehicle you are in.
+function showKeys(v) {
+  const k = (key, what) => `<span><kbd>${key}</kbd>${what}</span> `;
+  const drive = k('W or Up', 'gas') + k('S or Down', 'brake, reverse') + k('A D or Left Right', 'steer');
+  const rest = k('C', 'camera') + k('M', 'map') + k('V', 'change ride') + k('Q R', 'radio') + k('Esc', 'menu');
+  const mine = v.kind === 'air' ? k('W', 'forward') + k('A D', 'turn') + k('Space', v.fly === 'jet' ? 'pull up' : 'climb') + k('Shift', v.fly === 'jet' ? 'dive' : 'come down')
+    : v.kind === 'boat' ? drive + k('E', 'tie up at the dock, hold to pull a trap')
+    : drive + k('Space', 'handbrake') + k('E', "take the boat at Dad's place");
+  $('keys').innerHTML = mine + rest;
+}
 function setActive(v) {
   if (G.active && G.active !== v && G.active.kind === 'air') G.active.root.removeFromParent();
   G.active = v;
   if (!v.root.parent) scene.add(v.root);
   if (v.trailerRoot && !v.trailerRoot.parent) scene.add(v.trailerRoot);
   G.hud && G.hud.hint('');
+  showKeys(v);
 }
 G.boatId = 'boat';
 G.goBoat = async (x, z, h) => {
@@ -566,6 +580,7 @@ async function showVehicle(i) {
   $('vname').textContent = def.name;
   $('vyear').textContent = def.year + (def.note ? ' . ' + def.note : '');
   $('vcredit').textContent = CREDITS[def.credit] || '';
+  $('driveTip').textContent = G.started ? 'You carry on from where you are.' : def.kind === 'car' ? 'You start on the Ringling Bridge. The job: drive home to Longboat Key.' : def.kind === 'boat' ? "You start at Dad's dock on Longboat Key." : def.kind === 'truck' ? 'You start at the cold storage warehouse in Sarasota.' : 'You start in the air over Longboat Key.';
   const tok = ++sel.token;
   $('vload').style.display = 'block';
   const v = await getVehicle(def.id);
@@ -581,8 +596,6 @@ async function showVehicle(i) {
     disp.position.x = -(rb.min.x + rb.max.x) / 2; disp.position.z = -(rb.min.z + rb.max.z) / 2;
   } else {
     const m = v.model.clone(true); m.visible = true; disp.add(m);
-    const pin = v.pin.clone(true); pin.position.copy(v.pin.position); pin.scale.copy(v.pin.scale); disp.add(pin);
-    pin.userData.hub = pin.children[1];
     if (def.kind === 'boat') { disp.position.y = 0.55; disp.scale.setScalar(0.85); }
     if (def.kind === 'air') {
       // the jet and helicopter shrink to fit the turntable, the jetpack pilot grows
@@ -597,7 +610,6 @@ async function showVehicle(i) {
 }
 function updateSelect(dt) {
   sel.holder.rotation.y += dt * 0.45;
-  if (sel.disp && sel.disp.children) sel.disp.traverse((o) => { if (o.userData.hub && o.userData.hub.isObject3D) o.userData.hub.rotation.x += dt * 4; });
   if (input.up) showVehicle(sel.idx - 1);
   if (input.down) showVehicle(sel.idx + 1);
   if (input.confirm) startDrive();
@@ -734,6 +746,7 @@ function openMenu() {
   G.mode = 'menu';
   const m = $('menu');
   m.style.display = 'flex';
+  $('menuNow').textContent = G.missions.active ? 'Now: ' + (G.missions.defs.find((d) => d.id === G.missions.active.id) || {}).name + '.' : 'Now: ' + G.home.summary();
   const ms = $('menuMissions');
   ms.innerHTML = '';
   for (const d of G.missions.defs) {
@@ -842,6 +855,7 @@ function updatePlay(dt) {
     } else if (!G.missions.active) G.hud.hint('');
   }
   G.missions.update(dt);
+  G.home.update(dt, v);
   G.traffic.update(dt, v);
   G.boats.update(dt, v, G.fx, !G.boatsSeeded); G.boatsSeeded = true;
   G.tanker.update(dt);
@@ -852,7 +866,7 @@ function updatePlay(dt) {
   G.bikes.update(dt, v);
   G.pelicans.update(dt, v, G.traffic.enabled);
   const limit = v.kind === 'boat' || v.kind === 'air' ? null : G.missions.limitAt(v);
-  const marks = G.missions.minimapMarkers().concat(G.police.minimapMarkers());
+  const marks = G.missions.minimapMarkers().concat(G.police.minimapMarkers(), G.home.minimapMarkers());
   if (G.waypoint) marks.push({ x: G.waypoint.x, z: G.waypoint.z, color: '#ff4fd8', big: true, letter: 'X' });
   G.hud.update(dt, v, limit, area, marks);
   updateWaypoint(dt, v);
@@ -863,7 +877,7 @@ function updatePlay(dt) {
   const spd = Math.abs(v.speed), slide = v.drift || 0;
   const onTires = v.kind !== 'boat' && v.kind !== 'air' && !G.sinking && !frozen;
   screech(!onTires ? 0 : inp.handbrake && spd > 4 ? THREE.MathUtils.clamp(spd / 22 + slide / 14, 0.3, 1) : slide > 7 ? 0.25 : 0);
-  G.nav.update(dt, v, G.missions.navTarget() || G.waypoint);
+  G.nav.update(dt, v, G.missions.navTarget() || G.waypoint || G.home.navTarget());
   // arrows only show ahead of the car, so say so when the route is behind it
   G.behindT = G.nav.mesh.visible && G.nav.behind && Math.abs(v.speed) > 4 ? (G.behindT || 0) + dt : 0;
   if (G.behindT > 2.5) { G.behindT = -6; G.hud.toast('Turn around: the road arrows are behind you', 2.5); }
@@ -934,6 +948,7 @@ async function boot() {
     G.hud = new HUD(world);
     G.missions = new Missions(G);
     G.missions.setup();
+    G.home = new HomeTrip(G);   // the drive home: St. Armands Circle, bait by Mote, Cutter Lane
     G.traffic = new Traffic(scene, world);
     G.boats = new BoatTraffic(scene, world);
     G.tanker = new Tanker(scene, world);

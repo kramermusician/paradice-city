@@ -1,7 +1,7 @@
 // Vehicles: arcade car physics, boat physics, and the articulated cranberry truck.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { makePinwheel, makeTractor, makeTrailer, makeCrate, makeJetpackPilot, makeFighterJet, makeHelicopter } from './models.js';
+import { makeTractor, makeTrailer, makeCrate, makeJetpackPilot, makeFighterJet, makeHelicopter } from './models.js';
 
 const loader = new GLTFLoader();
 const cache = new Map();
@@ -39,14 +39,6 @@ export async function loadModel(def) {
   return src.clone(true);
 }
 
-// Find the roof height at a local x along the car's center line (for the pinwheel).
-function roofAt(model, x, maxY) {
-  const rc = new THREE.Raycaster(new THREE.Vector3(x, maxY + 2, 0), new THREE.Vector3(0, -1, 0));
-  model.updateMatrixWorld(true);
-  const hits = rc.intersectObject(model, true);
-  return hits.length ? hits[0].point.y : maxY;
-}
-
 class Vehicle {
   constructor(def) {
     this.def = def;
@@ -81,9 +73,6 @@ class Vehicle {
     this.root.rotation.set(0, this.heading, 0);
     this.body.rotation.set(this.roll, 0, this.pitch, 'YXZ');
     this.body.rotation.order = 'YXZ';
-  }
-  spinPinwheel(dt) {
-    if (this.pin) this.pin.userData.hub.rotation.x += dt * (2 + Math.abs(this.speed) * 1.6);
   }
   emit(type, data = {}) { this.events.push({ type, ...data }); }
 }
@@ -125,11 +114,6 @@ export class Car extends Vehicle {
     model.position.y = -bb.min.y;
     this.body.add(model);
     this.model = model;
-    const px = bb.min.x + this.len * 0.27;
-    this.pin = makePinwheel();
-    this.pin.position.set(px, roofAt(model, px, bb.max.y) - 0.02 - bb.min.y, -this.wid * 0.12);
-    this.pin.scale.setScalar(1.1);
-    this.body.add(this.pin);
     this.hood = new THREE.Vector3(bb.max.x * 0.15, this.hgt * 0.82, 0);
     // driver's eyes: left seat, a little behind the middle of the car. The scanned and decimated
     // models have no clean cabin, so the driver view hides the body and shows this simple cockpit.
@@ -300,7 +284,6 @@ export class Car extends Vehicle {
     const latAcc = this.speed * this.steer;
     this.roll += (THREE.MathUtils.clamp(-latAcc * 0.004, -0.06, 0.06) - this.roll) * Math.min(1, dt * 6);
     this.pos.y = this.y;
-    this.spinPinwheel(dt);
     if (this.cockpit) this.cockpit.userData.wheel.rotation.x = -this.steer * 4.5;
     this.sync();
   }
@@ -320,24 +303,14 @@ export class Boat extends Vehicle {
       // a small craft from the Dropbox set (jet ski): sits a little lower in the water than Dad's hull
       this.len = b.len; this.wid = b.wid;
       model.position.y = 0.12;
-      this.pin = makePinwheel();
-      this.pin.position.set(...b.pin); this.pin.scale.setScalar(0.7);
-      this.body.add(this.pin);
       this.hood = new THREE.Vector3(...b.seat);
       this.seat = this.hood;
       this.trim = 0; this.wakeT = 0;
       return this;
     }
-    const canopy = model.getObjectByName('canopy');
-    let top = 2.75;
-    if (canopy) { const cb = new THREE.Box3().setFromObject(canopy); top = cb.max.y; }
-    this.pin = makePinwheel();
-    this.pin.position.set(-0.4, top - 0.02, 0.45);
-    // Suzanne's Grady-White (2026-11-15) marks the pinwheel spot and the standing helm eye with empties
-    const pm = model.getObjectByName('pin_mount'), eye = model.getObjectByName('driver_eye');
+    // Suzanne's Grady-White (2026-11-15) marks the standing helm eye with an empty
+    const eye = model.getObjectByName('driver_eye');
     model.updateMatrixWorld(true);
-    if (pm) this.pin.position.copy(model.worldToLocal(pm.getWorldPosition(new THREE.Vector3())));
-    this.body.add(this.pin);
     this.hood = eye ? model.worldToLocal(eye.getWorldPosition(new THREE.Vector3())) : new THREE.Vector3(-0.6, 2.1, 0);
     this.ladder = model.getObjectByName('ladder');
     this.seat = this.hood;
@@ -393,7 +366,6 @@ export class Boat extends Vehicle {
     if (this.ladder) this.ladder.visible = sp < 2;   // the stern ladder is down only when drifting or tied up
     if (this.prop) this.prop.rotation.x += dt * (6 + (inp.throttle || 0) * 60 + sp * 2) * Math.sign(vf || 1);
     this.pos.y = this.y;
-    this.spinPinwheel(dt);
     this.sync();
 
     // wake and spray
@@ -430,10 +402,6 @@ export class Truck extends Car {
     this.model = tractor;
     this.len = 7.0; this.wid = 2.5; this.hgt = 3.9;
     this.wheelbase = 4.6;
-    this.pin = makePinwheel();
-    this.pin.position.set(-1.6, 3.2, 0.6);
-    this.pin.scale.setScalar(1.6);
-    this.body.add(this.pin);
     this.hood = new THREE.Vector3(1.0, 3.0, 0.3);
     this.seat = new THREE.Vector3(1.52, 2.9, -0.55); // just ahead of the windshield glass, driver's side
     this.hitchX = tractor.userData.hitch;
@@ -554,11 +522,6 @@ export class Flyer extends Vehicle {
     this.ud = model.userData;
     const bb = new THREE.Box3().setFromObject(model);
     this.len = bb.max.x - bb.min.x; this.wid = bb.max.z - bb.min.z; this.hgt = bb.max.y;
-    this.pin = makePinwheel();
-    if (f === 'jet') { this.pin.position.copy(this.ud.tailTop); this.pin.scale.setScalar(2.2); }
-    else if (f === 'heli') { this.pin.position.set(-5.9, 2.5, 0.2); this.pin.scale.setScalar(1.5); }
-    else { this.pin.position.copy(this.ud.packTop); this.pin.scale.setScalar(0.8); }
-    this.body.add(this.pin);
     // the driver view hides the body: first-person flying
     this.cockpit = new THREE.Group(); this.cockpit.visible = false; this.body.add(this.cockpit);
     this.seat = f === 'jet' ? new THREE.Vector3(4.6, 2.9, 0) : f === 'heli' ? new THREE.Vector3(1.4, 1.9, -0.35) : new THREE.Vector3(0.25, 1.7, 0);
@@ -674,7 +637,6 @@ export class Flyer extends Vehicle {
   }
   finish(dt, fx_) {
     this.pos.y = this.y;
-    this.spinPinwheel(dt);
     this.sync();
     // thruster or jet wash over water
     if (fx_ && this.y < 12 && !this.grounded && this.t % 0.06 < dt) {

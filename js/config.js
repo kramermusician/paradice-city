@@ -32,7 +32,7 @@ const ALL_VEHICLES = [
   { id: 'boat', kind: 'boat', name: "Dad's center console", year: '21.5 ft', note: 'white, navy pinstripes, T-top, one outboard',
     file: 'assets/cars/boat-grady216.glb', top: 41, accel: 4.6, grip: 1.4, credit: 'boat' },
   { id: 'jetski', kind: 'boat', name: 'Jet ski', year: 'stand-up fun', note: 'red, white and blue. Leaves from the dock',
-    file: 'assets/cars/jetski.glb', top: 55, accel: 6.5, grip: 1.9, credit: 'jetski', boat: { len: 3.3, wid: 1.25, seat: [-0.3, 1.5, 0], pin: [-1.1, 1.0, 0] } },
+    file: 'assets/cars/jetski.glb', top: 55, accel: 6.5, grip: 1.9, credit: 'jetski', boat: { len: 3.3, wid: 1.25, seat: [-0.3, 1.5, 0] } },
   { id: 'bugatti-veyron', kind: 'car', name: 'Bugatti Veyron', year: '2014', note: 'Legend Ettore Bugatti, blue and black',
     file: 'assets/cars/bugatti-veyron.glb', top: 160, accel: 13, grip: 11.5, credit: 'veyron' },
   { id: 'porsche-gt3', kind: 'car', name: 'Porsche 911 GT3', year: '991', note: 'orange, big wing',

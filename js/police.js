@@ -2,7 +2,8 @@
 // Speed past a cruiser (15 mph or more over the limit) or bump one and its lights come on.
 // Stars climb the longer you run: one cruiser, then two more, then a helicopter with a searchlight.
 // Stop for a warning, or outrun them (cruisers top out near 105 mph) to get away. Nobody rams,
-// nobody shoots, nobody gets hurt. Off during missions (the Cranberry Run has its own police).
+// nobody shoots, nobody gets hurt. Speeding stops happen on Longboat Key only
+// (2026-11-25; bumping a cruiser starts one anywhere). Off during missions (the Cranberry Run has its own police).
 import * as THREE from 'three';
 import { Traffic } from './traffic.js';
 import { makePoliceCar, makeHelicopter } from './models.js';
@@ -149,6 +150,8 @@ export class Police {
     if (this.patrol.copHit) { const c = this.patrol.copHit; this.patrol.copHit = null; this.start(c, `You bumped a ${this.agencyName(c.m)} car. Lights are on.`); return; }
     // speeding near a cruiser or a trap
     if (!v.lastRoad) return;
+    // 2026-11-25 (Kramer): speeding stops happen on Longboat Key only
+    if (this.world.areaName(v.pos.x, v.pos.z, v.lastRoad) !== 'Longboat Key') { this.overT = 0; return; }
     if (G.sky && G.sky.on) return; // no speeding stops while the birthday plane is writing
     const mph = Math.abs(v.speed) * MPH, lim = G.missions.limitAt(v);
     if (mph < lim + OVER) { this.overT = 0; return; }

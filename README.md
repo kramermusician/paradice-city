@@ -32,11 +32,24 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 
 ## What is in it
 
-- Vehicle select with a turntable: Porsche 911 Turbo S, Mercedes-AMG GLE 63 Coupe, BMW 7 Series, BMW 530i, BMW Z4 M Coupe, Audi TT, Kramer's Subaru Outback, Dad's boat, and the cranberry rig. Every vehicle has a spinning pinwheel antenna (the boat's is on the T-top).
+- Vehicle select with a turntable: Porsche 911 Turbo S, Mercedes-AMG GLE 63 Coupe, BMW 7 Series, BMW 530i, BMW Z4 M Coupe, Audi TT, Kramer's Subaru Outback, Dad's boat, and the cranberry rig.
 - Free roam starts on Gulf of Mexico Drive. Arcade handling with speed-sensitive steering, handbrake drifts, building collisions. Cars that drive into the water splash and come back on the nearest road.
 - Dad's boat (his Grady-White Fisherman 216, no name on the hull) is tied up at his dock on the canal behind his house on Cutter Lane (gold "Dad's place" marker in the street). Drive to it and press E to swap; drive the boat back to the dock and press E to get the car back. Boat physics: planes at about 35 mph, drifty turns, the bow rises with throttle and settles, wake, spray, bobbing, the propeller spins. It stops at the shoreline and slides along it.
 - HUD: mph, the posted speed limit (from OpenStreetMap where tagged), area name, heading-up minimap with mission markers.
 - Light ambient traffic on the main roads (toggle in the pause menu). Golf carts with drivers cross near the Harbourside course and Bay Isles. 18 boats (center consoles, sailboats, pontoons, cruisers, skiffs) cruise the bay and gulf near you, steer around land, give your boat room and bump off it.
+
+## Drive home, bait stop and the Mobil (2026-11-25)
+
+`js/stops.js`, hooked into `js/main.js` (placeStops, buildStops, `G.home`).
+
+- The pinwheel antenna is gone from every vehicle and from the picker.
+- Instructions on every page: the loading screen says what comes next, the picker is titled "Choose your ride" with two numbered steps and a line under Drive saying where you start, the controls row at the bottom is key chips for the vehicle you are in (`showKeys` in main.js), the pause menu opens with "Now: ..." and one line per section, the big map says what a click does.
+- Drive home: the first time Dad is in a car a yellow banner says "Drive home, Dad. Pass through St. Armands Circle, pick up bait by Mote Aquarium, then cross the bridge to Longboat Key", and a three-line checklist stays top left with the distance to the next stop. Road arrows and numbered minimap dots lead to the current stop. It is a free-roam objective, not a mission: patrols stay on, a mission started on top of it pauses it, and a target dropped on the big map wins the arrows. Driving straight to a later stop skips the earlier ones. Debug handle: `G.home` (`stage` 0 circle, 1 bait, 2 home, 3 done).
+- Bait stop: New Pass Grill & Bait Shop on its real footprint at the south foot of the New Pass bridge (1505 Ken Thompson Parkway, City Island, next to Mote). Stop in the yellow Bait marker for a second and a half; a bait bucket rides home on the roof. Reaching the gold Dad's place marker ends it with a card that points to the boat and Check the Traps.
+- Mobil: Longboat Key's only gas station, on its real footprint at 400 Gulf of Mexico Drive (the pump lanes were already in the map data). Store, canopy, two pump islands, price pylon. Stopping under the canopy gives a "Tank is full" toast; nothing else depends on fuel.
+- Speeding: speeding stops happen on Longboat Key only (area test in `Police.update`). Bumping a cruiser starts a chase anywhere.
+- Area names: New Pass is now tested on its real slant, so the south tip of Longboat Key no longer reads as Lido Key, and Mote and the bait shop read as City Island.
+- Test: `node build/test/stops.cjs <outdir>` (picker, checklist, each stop, the speeding rule before and after the key, pause menu; shots named `stops-*.png`).
 
 ## Kramer's Dropbox 3D set (added 2026-11-13)
 

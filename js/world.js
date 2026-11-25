@@ -633,9 +633,12 @@ export class World {
     if (near(27.3185, -82.5772, 380)) return 'St. Armands';
     if (near(27.3185, -82.5615, 750)) return 'Bird Key';
     const lx = this.lineX(z);
-    const zNP = 3080;
-    if (z < zNP && x < lx + 900) return 'Longboat Key';
-    if (z >= zNP && x < lx + 700) return 'Lido Key';
+    // New Pass divides the keys. It runs on a slant, so the test is which side of the pass a point is on,
+    // measured along the bridge (2026-11-25: the south tip of Longboat Key used to read as Lido Key).
+    const north = (x - 3780) * 0.596 + (z - 3566) * 0.803 < 0;
+    if (north && x < lx + 900) return 'Longboat Key';
+    if (!north && x < lx + 700) return 'Lido Key';
+    if (near(27.3331, -82.5780, 480)) return 'City Island';   // Mote Aquarium and the bait shop, at the foot of the New Pass bridge
     const [xDT] = ll(0, -82.557);
     if (x > xDT && z > ll(27.355, 0)[1]) return 'Downtown Sarasota';
     if (x > xDT) return z < ll(27.39, 0)[1] ? 'Bradenton' : 'Sarasota';
