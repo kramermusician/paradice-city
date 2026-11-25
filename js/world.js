@@ -179,6 +179,7 @@ export class World {
       const hw = rd.w / 2;
       const rank = RANK[rd.k] ?? 1;
       const off = 0.06 + rank * 0.025;
+      rd.off = off;   // how far the drawn surface sits above the map height (js/bikes.js rides on it)
       rd.limit = this.limitFor(rd);
       const t = this.tile(p[0], p[1]);
       const L = [], Rt = [];
@@ -628,6 +629,7 @@ export class World {
   areaName(x, z, onRoad) {
     const ll = (la, lo) => xz(la, lo);
     const near = (la, lo, r) => { const [px, pz] = ll(la, lo); return Math.hypot(px - x, pz - z) < r; };
+    if (onRoad && onRoad.b && /John Ringling Parkway|Gulf of Mexico Drive/.test(onRoad.n || '')) return 'New Pass Bridge';
     if (onRoad && /John Ringling/.test(onRoad.n || '') && onRoad.b) return 'Ringling Causeway';
     if (!this.isLand(x, z)) return this.westOfIslands(x, z) ? 'Gulf of Mexico' : 'Sarasota Bay';
     if (near(27.3185, -82.5772, 380)) return 'St. Armands';

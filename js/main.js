@@ -963,7 +963,7 @@ async function boot() {
     showSettings();
     G.radio = new Radio((m) => G.hud.toast(m, 3));
     G.sky = new SkyWriter(scene, { fixMaterial: G.fixMaterial });
-    G.radio.load();
+    G.radio.ready = G.radio.load();
     fillCredits();
     buildSelectList();
     setLoad('Polishing the silver cars');

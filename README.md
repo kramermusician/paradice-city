@@ -49,6 +49,9 @@ That serves this folder on port 8915 (only if nothing is serving there yet) and 
 - Mobil: Longboat Key's only gas station, on its real footprint at 400 Gulf of Mexico Drive (the pump lanes were already in the map data). Store, canopy, two pump islands, price pylon. Stopping under the canopy gives a "Tank is full" toast; nothing else depends on fuel.
 - Speeding: speeding stops happen on Longboat Key only (area test in `Police.update`). Bumping a cruiser starts a chase anywhere.
 - Area names: New Pass is now tested on its real slant, so the south tip of Longboat Key no longer reads as Lido Key, and Mote and the bait shop read as City Island.
+- Radio plays by default from the first Drive, Paradise City first. `Radio.start()` now waits for the track check (`G.radio.ready`); before, a quick Drive left it off air for the session. The public site still has no mp3s (gitignored), so it reads "Radio off air" there. Test: `build/test/radio2.cjs`.
+- New Pass bridge: the lift span has an open steel grid deck (`newpass-grate` mesh in js/streetview.js, one tiled canvas texture, 10 triangles), and the deck now reads "New Pass Bridge" in the HUD.
+- Cyclists ride on the drawn road surface (`rd.off` from js/world.js); their tires used to sit 13 cm into it. Test for both: `build/test/grate.cjs <outdir>`.
 - Test: `node build/test/stops.cjs <outdir>` (picker, checklist, each stop, the speeding rule before and after the key, pause menu; shots named `stops-*.png`).
 
 ## Kramer's Dropbox 3D set (added 2026-11-13)

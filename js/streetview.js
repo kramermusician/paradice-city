@@ -156,6 +156,7 @@ export function buildStreetView(scene, W, G) {
 
   // ------------------------------------------------ New Pass bridge
   const deck = byName(/Gulf of Mexico Drive|John Ringling Parkway/, BRIDGE_BOX, false);
+  const grate = { p: [], uv: [] };   // steel grid deck on the bascule span
   let peak = null;
   for (const s of deck) { const y = Math.max(s[2], s[5]); if (!peak || y > peak.y) peak = { x: (s[0] + s[3]) / 2, z: (s[1] + s[4]) / 2, y, s }; }
   for (const s of deck) {
@@ -165,6 +166,14 @@ export function buildStreetView(scene, W, G) {
     const mx = (ax + bx) / 2, mz = (az + bz) / 2, my = (ay + by) / 2 + 0.1;
     const pitch = Math.atan2(by - ay, len);
     const blue = peak && Math.hypot(mx - peak.x, mz - peak.z) < 22;
+    if (blue) {
+      // open steel grating across the whole roadway of the lift span, a touch above the asphalt
+      const d = Math.hypot(ax - peak.x, az - peak.z) * Math.sign((ax - peak.x) * tx + (az - peak.z) * tz), w = hw - 0.05, up = 0.035;
+      const A = [ax - nx * w, ay + up, az - nz * w], B = [bx - nx * w, by + up, bz - nz * w], C = [bx + nx * w, by + up, bz + nz * w], D = [ax + nx * w, ay + up, az + nz * w];
+      grate.p.push(...A, ...C, ...B, ...A, ...D, ...C);
+      const u0 = d / 0.9, u1 = (d + len) / 0.9, vw = 2 * w / 0.9;
+      grate.uv.push(u0, 0, u1, vw, u1, 0, u0, 0, u0, vw, u1, vw);
+    }
     for (const sd of [-1, 1]) {
       const ex = mx + nx * sd * (hw + 0.02), ez = mz + nz * sd * (hw + 0.02);
       S.add(BOX, 0x8f969b, ex, my + 1.22, ez, ry, len + 0.05, 0.08, 0.1, 0, pitch);               // pipe rail on the parapet
@@ -277,8 +286,24 @@ export function buildStreetView(scene, W, G) {
 
   const solid = S.mesh(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   const flat = F.mesh(new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+  let grateMesh = null;
+  if (grate.p.length) {
+    const tex = canvasTex(128, 128, (c, w, h) => {
+      c.fillStyle = '#5d6468'; c.fillRect(0, 0, w, h);                       // steel
+      c.fillStyle = '#22272b';                                               // the open cells, water far below
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 8; j++) c.fillRect(i * 32 + 5, j * 16 + 3, 24, 11);
+      c.fillStyle = '#7d868b'; for (let i = 0; i < 4; i++) c.fillRect(i * 32, 0, 3, h);   // main bearing bars catch the light
+    });
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(grate.p, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(grate.uv, 2));
+    g.computeVertexNormals();
+    grateMesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+    grateMesh.matrixAutoUpdate = false; grateMesh.name = 'newpass-grate';
+  }
   const out = new THREE.Group(); out.name = 'streetview';
-  for (const m of [solid, flat, ...signMeshes]) if (m) { m.receiveShadow = true; m.updateMatrix(); out.add(m); }
+  for (const m of [solid, flat, grateMesh, ...signMeshes]) if (m) { m.receiveShadow = true; m.updateMatrix(); out.add(m); }
   scene.add(out);
   let tris = 0; out.traverse((o) => { if (o.isMesh) tris += o.geometry.attributes.position.count / 3; });
   console.log(`streetview pass: ${Math.round(tris)} tris, ${out.children.length} meshes`);

@@ -92,7 +92,7 @@ export class Bikes {
       // right-hand edge, outside the traffic lane
       const off = Math.max(r.w / 2 - 0.7, Math.min(2.2, r.w * 0.25) + 1.7);
       const x = ax + (bx - ax) * g.u - tz * off, z = az + (bz - az) * g.u + tx * off;
-      const y = p[i0 * 3 + 2] + (p[i1 * 3 + 2] - p[i0 * 3 + 2]) * g.u + 0.02;
+      const y = p[i0 * 3 + 2] + (p[i1 * 3 + 2] - p[i0 * 3 + 2]) * g.u + (r.off || 0.1) + 0.03;   // on the drawn road surface (2026-11-25: the tires used to sit 13 cm into it)
       const h = Math.atan2(-tz, tx);
       const last = g.hist[g.hist.length - 1];
       if (!last || Math.hypot(last[0] - x, last[2] - z) > 0.4) { g.hist.push([x, y, z, h]); if (g.hist.length > 60) g.hist.shift(); }

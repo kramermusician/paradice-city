@@ -12,10 +12,15 @@ export class Radio {
       if (!t.title || !t.file) continue;
       try { const r = await fetch('assets/music/' + t.file, { method: 'HEAD' }); if (r.ok) ok.push(t); } catch (e) { /* skip */ }
     }
+    // Paradise City always opens the show (Kramer, 2026-11-25), whatever slot it sits in
+    const pc = ok.findIndex((t) => /paradise city/i.test(t.title));
+    if (pc > 0) ok.unshift(ok.splice(pc, 1)[0]);
     this.list = ok;
   }
   tag() { const el = document.getElementById('radioTag'); if (el) el.textContent = this.i >= 0 ? `${this.station}: ${this.list[this.i].title}` : (this.list.length ? '' : 'Radio off air'); }
-  start() { if (this.started) return; this.started = true; if (!this.list.length) { this.tag(); return; } this.step(1); }
+  // Plays by default from the first Drive. The track check may still be running when Drive is pressed,
+  // so wait for it (before 2026-11-25 a quick Drive left the radio off air for the whole session).
+  async start() { if (this.started) return; this.started = true; await this.ready; if (!this.list.length) { this.tag(); return; } if (this.i < 0) this.step(1); }
   step(d, quiet) {
     if (!this.list.length) { this.toast('Radio off air'); this.tag(); return; }
     this.i = (this.i + d + this.list.length) % this.list.length;
