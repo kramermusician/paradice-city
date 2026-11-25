@@ -7,6 +7,6 @@ ROADMAP.md
 STATUS.md
 build.log
 .DS_Store
-assets/music/*.mp3
+# assets/music/*.mp3  (2026-11-25, Kramer: the songs go on the site for Dad's birthday, one day only. To take them down: restore this line and drop the songs commit, see README)
 publish.sh
 assets/cars/lucid-air.glb
