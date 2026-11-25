@@ -24,8 +24,11 @@ const ALL_VEHICLES = [
     file: 'assets/cars/bmw-z4m.glb', top: 112, accel: 8.5, grip: 10.5, credit: 'z4' },
   { id: 'audi-tt', kind: 'car', name: 'Audi TT 3.2 coupe', year: '2004', note: '8N, silver',
     file: 'assets/cars/audi-tt.glb', top: 98, accel: 7, grip: 10, credit: 'tt' },
-  { id: 'subaru-outback', kind: 'car', name: "Kramer's Subaru Outback XT", year: '2024', note: 'scanned by Kramer',
-    file: 'assets/cars/subaru-outback.glb', top: 92, accel: 6, grip: 9, credit: 'subaru' },
+  // 2026-11-25: the phone scan (assets/cars/subaru-outback.glb, holes and no wheels) is retired from the picker.
+  // Kramer's car is now the clean Outback model in black (paint.color).
+  { id: 'subaru-outback', kind: 'car', name: "Kramer's Subaru Outback XT", year: '2024', note: 'black, turbo',
+    file: 'assets/cars/subaru-outback-22.glb', top: 96, accel: 6.8, grip: 9.5, credit: 'outback22',
+    paint: { match: /Autumn_Green/, color: 0x0b0b0d, metalness: 0.6, roughness: 0.28 } },
   { id: 'boat', kind: 'boat', name: "Dad's center console", year: '21.5 ft', note: 'white, navy pinstripes, T-top, one outboard',
     file: 'assets/cars/boat-grady216.glb', top: 41, accel: 4.6, grip: 1.4, credit: 'boat' },
   { id: 'jetski', kind: 'boat', name: 'Jet ski', year: 'stand-up fun', note: 'red, white and blue. Leaves from the dock',

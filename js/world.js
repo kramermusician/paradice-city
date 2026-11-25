@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { xz, ISLAND_LINE } from './config.js';
 import { makeWaterMaterial } from './water.js';
 import { armandsPlace } from './armands.js';
+import { buildBuildings as drawBuildings, wallShader } from './buildings.js';
+import { plantGreenery, greeneryMeshes, updateGreenery } from './greenery.js';
 
 const TILE = 1000;
 const RANK = { service: 0, residential: 1, unclassified: 1, living_street: 1, footway: 0, tertiary: 2, secondary: 3, primary: 4, trunk: 4, motorway: 4 };
@@ -13,9 +15,10 @@ const DEFAULT_LIMIT = { primary: 45, trunk: 45, secondary: 35, tertiary: 30, unc
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 
 class Buf { // growable vertex + color + uv arrays for one merged mesh
-  constructor() { this.p = []; this.c = []; this.u = []; }
+  constructor() { this.p = []; this.c = []; this.u = []; this.s = []; this.cur = [0, 0]; }   // cur: [style, seed] for the wall shader (js/buildings.js)
   tri(a, b, c, col, ua, ub, uc) {
     this.p.push(...a, ...b, ...c);
+    const cu = this.cur; this.s.push(cu[0], cu[1], cu[0], cu[1], cu[0], cu[1]);
     for (let i = 0; i < 3; i++) this.c.push(col[0], col[1], col[2]);
     if (ua) this.u.push(...ua, ...ub, ...uc); else this.u.push(0, 0, 0, 0, 0, 0);
   }
@@ -26,6 +29,7 @@ class Buf { // growable vertex + color + uv arrays for one merged mesh
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.u, 2));
+    g.setAttribute('st', new THREE.Float32BufferAttribute(this.s, 2));
     g.computeVertexNormals();
     g.computeBoundingSphere();
     return g;
@@ -72,6 +76,8 @@ export class World {
     this.buildBuildings();
     progress('Planting palms');
     this.buildPalms();
+    progress('Planting trees and hedges');
+    { const ac = armandsPlace(this); this.armandsCentre = ac; plantGreenery(this); }
     this.finishTiles();
     scene.add(this.group);
     this.islandLine = ISLAND_LINE;
@@ -126,7 +132,7 @@ export class World {
       const p = i * 4;
       const land = m[p], g = m[p + 1], s = m[p + 2];
       let c;
-      if (s > 127) c = [226, 208, 166];
+      if (s > 127) c = [241, 233, 213];   // Longboat Key sand is nearly white
       else if (g > 200) c = [104, 158, 74];
       else if (g > 150) c = [92, 132, 66];
       else if (g > 90) c = [76, 108, 60];
@@ -449,6 +455,8 @@ export class World {
             if (lbk) hh = 3.4 + (hh % 1) * 0.6;
             const idx = this.addCollider(poly, hh);
             this.bList[idx].hip = true; if (lbk) this.bList[idx].lbk = true;
+            // the house's own frame for js/buildings.js: t along the street, n from the street toward the back yard
+            this.bList[idx].house = { cx, cz, tx, tz, nx: -tz * side, nz: tx * side, W, D };
             n++;
             // canal-front lot? walk out the back of the house to the seawall (bay side only, no Gulf beach docks)
             const nx = -tz * side, nz = tx * side;
@@ -470,57 +478,7 @@ export class World {
     this.houseCount = n;
   }
 
-  buildBuildings() {
-    const r = rng(42);
-    const walls = [[0.93, 0.91, 0.86], [0.95, 0.88, 0.76], [0.93, 0.8, 0.72], [0.82, 0.88, 0.9], [0.86, 0.9, 0.82], [0.98, 0.96, 0.93], [0.9, 0.84, 0.88]];
-    const roofs = [[0.66, 0.36, 0.26], [0.72, 0.42, 0.3], [0.78, 0.76, 0.72], [0.6, 0.6, 0.6]];
-    for (const b of this.bList) {
-      if (b.custom) continue;
-      const p = b.poly, n = p.length / 2, h = b.h;
-      const t = this.tile(b.cx, b.cz);
-      // counter-clockwise check for outward faces
-      let area = 0;
-      for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += p[i * 2] * p[j * 2 + 1] - p[j * 2] * p[i * 2 + 1]; }
-      const flip = area > 0;
-      let wc = walls[Math.floor(r() * walls.length)];
-      if (b.lbk) wc = [0.97, 0.96, 0.92];
-      const rc = h > 12 ? roofs[2 + Math.floor(r() * 2)] : roofs[Math.floor(r() * 3)];
-      let u = 0;
-      for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n;
-        let ax = p[i * 2], az = p[i * 2 + 1], bx = p[j * 2], bz = p[j * 2 + 1];
-        const len = Math.hypot(bx - ax, bz - az);
-        if (flip) { [ax, bx] = [bx, ax]; [az, bz] = [bz, az]; }
-        t.bld.quad([ax, 0, az], [bx, 0, bz], [bx, h, bz], [ax, h, az], wc, [u, 0], [u + len, 0], [u + len, h], [u, h]);
-        u += len;
-      }
-      if (b.hip) {
-        let rcol = [[0.72, 0.4, 0.28], [0.62, 0.34, 0.26], [0.8, 0.78, 0.72], [0.45, 0.5, 0.55]][Math.floor(r() * 4)];
-        if (b.lbk) rcol = [0.8, 0.82, 0.82];
-        const ridge = 2.2;
-        const cxr = (p[0] + p[2] + p[4] + p[6]) / 4, czr = (p[1] + p[3] + p[5] + p[7]) / 4;
-        // ridge along the long axis (edge 0-1)
-        const ex = (p[2] - p[0]) * 0.25, ez = (p[3] - p[1]) * 0.25;
-        const r1 = [cxr - ex, h + ridge, czr - ez], r2 = [cxr + ex, h + ridge, czr + ez];
-        const v = (k) => [p[k * 2], h, p[k * 2 + 1]];
-        const ov = (k, f) => { const dx = p[k * 2] - cxr, dz = p[k * 2 + 1] - czr; return [cxr + dx * f, h - 0.15, czr + dz * f]; };
-        const e = [ov(0, 1.12), ov(1, 1.12), ov(2, 1.12), ov(3, 1.12)];
-        const tri2 = (a1, b1, c1) => { t.bld.tri(a1, b1, c1, rcol, [-1, -1], [-1, -1], [-1, -1]); t.bld.tri(a1, c1, b1, rcol, [-1, -1], [-1, -1], [-1, -1]); };
-        tri2(e[0], e[1], r2); tri2(e[0], r2, r1); tri2(e[2], e[3], r1); tri2(e[2], r1, r2); tri2(e[1], e[2], r2); tri2(e[3], e[0], r1);
-        continue;
-      }
-      const contour = [];
-      for (let i = 0; i < n; i++) contour.push(new THREE.Vector2(p[i * 2], p[i * 2 + 1]));
-      const tris = THREE.ShapeUtils.triangulateShape(contour, []);
-      for (const [a, bq, c] of tris) {
-        const va = [p[a * 2], h, p[a * 2 + 1]], vb = [p[bq * 2], h, p[bq * 2 + 1]], vc = [p[c * 2], h, p[c * 2 + 1]];
-        // make the roof face up
-        const cross = (vb[0] - va[0]) * (vc[2] - va[2]) - (vb[2] - va[2]) * (vc[0] - va[0]);
-        if (cross > 0) t.bld.tri(va, vc, vb, rc, [-1, -1], [-1, -1], [-1, -1]);
-        else t.bld.tri(va, vb, vc, rc, [-1, -1], [-1, -1], [-1, -1]);
-      }
-    }
-  }
+  buildBuildings() { drawBuildings(this); }   // js/buildings.js
 
   // ------------------------------------------------------------- palms
   buildPalms() {
@@ -597,16 +555,8 @@ export class World {
     const road = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
     const lines = new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8, fog: true });
     const bridge = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-    const bld = new THREE.MeshLambertMaterial({ vertexColors: true });
-    bld.onBeforeCompile = (sh) => {
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vWin;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvWin = uv;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vWin;').replace('#include <color_fragment>', `#include <color_fragment>
-        if (vWin.y > 0.9) {
-          vec2 f = vec2(fract(vWin.x / 3.1), fract((vWin.y - 0.4) / 3.2));
-          float win = step(0.18, f.x) * step(f.x, 0.78) * step(0.3, f.y) * step(f.y, 0.82);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.2, 0.26) + 0.12 * vec3(1.0, 0.6, 0.35) * f.y, win * 0.85);
-        } else if (vWin.y >= 0.0 && vWin.y < 0.9) { diffuseColor.rgb *= 0.8 + 0.2 * vWin.y; }`);
-    };
+    const bld = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, shadowSide: THREE.BackSide });
+    bld.onBeforeCompile = wallShader;
     const o = new THREE.Object3D();
     for (const t of this.tiles.values()) {
       t.casters = []; t.detail = [];
@@ -636,6 +586,7 @@ export class World {
         t.palmMeshes = [tm, cm];
         t.group.add(tm, cm);
       }
+      greeneryMeshes(this, t);
       t.roads = t.lines = t.bridge = t.bld = null;
       this.group.add(t.group);
     }
@@ -649,6 +600,7 @@ export class World {
       for (const m of t.casters) m.castShadow = near;
       for (const m of t.detail) m.visible = d < 1600;
       if (t.palmMeshes) for (const m of t.palmMeshes) m.visible = d < 2600;
+      updateGreenery(t, d);
     }
   }
 

@@ -9,7 +9,18 @@ const WATER_Y = -0.35;
 
 export async function loadModel(def) {
   if (!def.file) return null;
-  if (!cache.has(def.file)) cache.set(def.file, loader.loadAsync(def.file).then((g) => {
+  // def.paint = { match: /material name/, color, metalness, roughness }: the same file in another colour (Kramer's Outback)
+  const key = def.file + (def.paint ? '|' + def.paint.color : '');
+  if (!cache.has(key)) cache.set(key, loader.loadAsync(def.file).then((g) => {
+    if (def.paint) g.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!m || !def.paint.match.test(m.name)) continue;
+        m.color.set(def.paint.color);
+        if (def.paint.metalness !== undefined) m.metalness = def.paint.metalness;
+        if (def.paint.roughness !== undefined) m.roughness = def.paint.roughness;
+      }
+    });
     g.scene.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = false;
@@ -24,7 +35,7 @@ export async function loadModel(def) {
     if (window.G && G.fixMaterials) G.fixMaterials(g.scene);   // Safari: lambert/standard car materials (main.js)
     return g.scene;
   }));
-  const src = await cache.get(def.file);
+  const src = await cache.get(key);
   return src.clone(true);
 }
 

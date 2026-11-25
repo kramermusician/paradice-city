@@ -13,7 +13,7 @@ import { loadProps, Turtles, Flora } from './props.js';
 import { Particles } from './effects.js';
 import { input } from './input.js';
 import { Radio } from './radio.js';
-import { initAudio, engine, whoosh, splashSound, chime, screech, setSiren, setRotor } from './audio.js';
+import { initAudio, engine, whoosh, splashSound, chime, screech, setSiren, setRotor, setVoice, setEngineVolume, level } from './audio.js';
 import { Police } from './police.js';
 import { Bikes } from './bikes.js';
 import { Pelicans } from './pelicans.js';
@@ -32,7 +32,8 @@ const G = window.G = { input, time: 0, paused: false, defaultSun: 24, defaultAz:
 
 // settings that stick between visits (pause menu, Settings)
 const CAM_NAMES = ['Chase', 'Driver', 'Overhead'];
-const settings = G.settings = { arrows: true, cam: 0, police: true };
+G.audioLevel = level;
+const settings = G.settings = { arrows: true, cam: 0, police: true, engine: 1 };   // engine: 1 normal, 0.45 quiet, 0 off
 try { Object.assign(settings, JSON.parse(localStorage.getItem('paradice-settings') || '{}')); } catch (e) { /* private mode */ }
 if (params.has('camMode')) settings.cam = +params.get('camMode');
 if (params.has('arrows')) settings.arrows = params.get('arrows') !== '0';
@@ -49,6 +50,7 @@ function showSettings() {
   $('btnArrows').textContent = 'Road arrows: ' + (settings.arrows ? 'on' : 'off');
   $('btnCamera').textContent = 'Camera: ' + CAM_NAMES[G.camMode];
   $('btnPolice').textContent = 'Police patrols: ' + (settings.police ? 'on' : 'off');
+  $('btnEngine').textContent = 'Engine sound: ' + (settings.engine >= 1 ? 'normal' : settings.engine > 0 ? 'quiet' : 'off'); setEngineVolume(settings.engine ?? 1);
   if (G.nav) G.nav.enabled = settings.arrows;
 }
 
@@ -125,9 +127,14 @@ G.setSun = (el, azDeg = G.defaultAz) => {
       u.uBright.value = 0.9 + 0.1 * b;
     }
     sun.color.lerp(new THREE.Color(1.0, 0.97, 0.9), b);
+    // daylight fill: the sunset's peach sky light made every shaded wall brown
+    hemi.color.set(0xffd6c0).lerp(new THREE.Color(0xe6f0ff), b); hemi.groundColor.set(0x50604a).lerp(new THREE.Color(0xb8b4a0), b); hemi.intensity += 0.25 * b;
     mixC(fogColor, 0.74, 0.84, 0.95); scene.fog.color.copy(fogColor); waterUniforms.uFogColor.value.copy(fogColor);
     mixC(waterUniforms.uSkyColor.value, 0.45, 0.68, 0.92); mixC(waterUniforms.uSunColor.value, 1.0, 0.92, 0.8);
-  } else for (const s of [sky, envSky]) {
+    // daytime water: turquoise shallows over white sand, deeper blue offshore (overhead-beach-view.png)
+    waterUniforms.uShallowCol.value.setRGB(0.12, 0.42, 0.42).lerp(new THREE.Color(0.10, 0.60, 0.55), b); waterUniforms.uDeep.value.setRGB(0.03, 0.12, 0.17).lerp(new THREE.Color(0.02, 0.19, 0.30), b);
+  } else { hemi.color.set(0xffd6c0); hemi.groundColor.set(0x50604a); waterUniforms.uShallowCol.value.setRGB(0.12, 0.42, 0.42); waterUniforms.uDeep.value.setRGB(0.03, 0.12, 0.17); }
+  if (b <= 0) for (const s of [sky, envSky]) {
     const u = s.material.uniforms;
     u.uZenith.value.setRGB(0.10, 0.12, 0.30); u.uAway.value.setRGB(0.62, 0.45, 0.55); u.uSunCol.value.setRGB(1.0, 0.6, 0.3);
   }
@@ -744,6 +751,7 @@ $('btnCreditsClose').onclick = () => { $('credits').style.display = 'none'; };
 $('btnArrows').onclick = () => { settings.arrows = !settings.arrows; saveSettings(); showSettings(); };
 $('btnCamera').onclick = () => setCamMode(G.camMode + 1);
 $('btnTraffic').onclick = () => { G.traffic.enabled = !G.traffic.enabled; if (G.boats) G.boats.enabled = G.traffic.enabled; if (G.bikes) G.bikes.enabled = G.traffic.enabled; $('btnTraffic').textContent = 'Traffic: ' + (G.traffic.enabled ? 'on' : 'off'); };
+$('btnEngine').onclick = () => { settings.engine = settings.engine >= 1 ? 0.45 : settings.engine > 0 ? 0 : 1; saveSettings(); showSettings(); };
 $('btnPolice').onclick = () => { settings.police = !settings.police; saveSettings(); if (!settings.police) G.police.stop(true); showSettings(); };
 function fillCredits() {
   const seen = new Set();
@@ -848,6 +856,7 @@ function updatePlay(dt) {
   if (G.waypoint) marks.push({ x: G.waypoint.x, z: G.waypoint.z, color: '#ff4fd8', big: true, letter: 'X' });
   G.hud.update(dt, v, limit, area, marks);
   updateWaypoint(dt, v);
+  setVoice(v.def.id);
   engine(Math.min(1, Math.abs(v.speed) / v.top), v.kind === 'air' ? Math.max(inp.throttle || 0, Math.abs(inp.lift || 0)) : inp.throttle || 0, v.fly || v.kind, true);
   setRotor(G.missions.helis.length + (v.fly === 'heli' ? 1 : 0) + G.police.heliCount());
   // tires: loud with the handbrake on at speed, a quieter chirp in any big slide
@@ -871,7 +880,7 @@ function frame(now) {
   if (fpsAcc > 1) { G.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
   G.time += dt;
   input.update();
-  waterUniforms.uTime.value = G.time;
+  waterUniforms.uTime.value = G.time; sky.material.uniforms.uTime.value = G.time;
   if (G.mode === 'select') { updateSelect(dt); return; }
   if (G.mode === 'intro') { updateIntro(dt); return; }
   if (G.mode === 'map') { screech(0); engine(0, 0, 'car', false); G.bigmap.update(dt); return; }

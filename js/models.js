@@ -708,14 +708,14 @@ function liveryTexture(id) {
 let doorZ = null;   // half-width of the Explorer at door height, measured once by a ray
 function addLivery(ex) {
   const bb = new THREE.Box3().setFromObject(ex), len = bb.max.x - bb.min.x, hgt = bb.max.y - bb.min.y;
-  const cx = (bb.max.x + bb.min.x) / 2 - len * 0.04, y = bb.min.y + hgt * 0.42;
+  const cx = (bb.max.x + bb.min.x) / 2 - len * 0.03, y = bb.min.y + hgt * 0.36;
   if (doorZ === null) {
     ex.updateMatrixWorld(true);
     const rc = new THREE.Raycaster(new THREE.Vector3(cx, y, bb.max.z + 3), new THREE.Vector3(0, 0, -1));
     const hit = rc.intersectObject(ex, true)[0];
     doorZ = hit ? hit.point.z : bb.max.z * 0.95;
   }
-  const w = len * 0.62, h = w / 4;
+  const w = len * 0.5, h = w / 4;
   const out = {};
   for (const id of Object.keys(AGENCIES)) {
     const mat = new THREE.MeshLambertMaterial({ map: liveryTexture(id), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
