@@ -48,7 +48,7 @@ const ALL_VEHICLES = [
   { id: 'rr-spectre', kind: 'car', name: 'Rolls-Royce Spectre', year: '2024', note: 'electric coupe, gold',
     file: 'assets/cars/rr-spectre.glb', top: 115, accel: 9, grip: 9.5, credit: 'spectre' },
   { id: 'rr-phantom', kind: 'car', name: 'Rolls-Royce Phantom', year: '2022', note: 'Extended Series II, black',
-    file: 'assets/cars/rr-phantom.glb', top: 105, accel: 7, grip: 8.5, credit: 'phantom' },
+    file: 'assets/cars/rr-phantom.glb', flip: true, top: 105, accel: 7, grip: 8.5, credit: 'phantom' },
   { id: 'subaru-outback-22', kind: 'car', name: 'Subaru Outback', year: '2022', note: 'showroom model, green',
     file: 'assets/cars/subaru-outback-22.glb', top: 92, accel: 6, grip: 9.5, credit: 'outback22' },
   { id: 'fire-truck', kind: 'car', name: 'Fire truck', year: 'engine 1', note: 'red, nine meters long',
@@ -123,7 +123,7 @@ export const PLACES = {
   buoys: [{ xz: [950, 150] }, { xz: [1500, 900] }, { xz: [2050, 1550] }, { xz: [2600, 2050] }, { xz: [2950, 2480] }],
   // Dad's house, Cutter Lane. at: how far along the street (0 south end, 1 north end); side: 1 east, -1 west.
   // Placed from the street and the canal in the map data, not from a geocoder (his address never leaves the machine).
-  dadsPlace: { road: 'Cutter Lane', at: 0.5, side: 1 },
+  dadsPlace: { road: 'Cutter Lane', at: 0.5, side: -1 },
 };
 
 // The barrier-island center line in local meters (x, z), north to south, measured from the

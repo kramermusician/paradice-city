@@ -33,6 +33,9 @@ export async function loadModel(def) {
       }
     });
     if (window.G && G.fixMaterials) G.fixMaterials(g.scene);   // Safari: lambert/standard car materials (main.js)
+    if (def.flip) {   // model built facing backwards (the Phantom): turn it around inside a wrapper group
+      const wrap = new THREE.Group(); g.scene.rotation.y += Math.PI; wrap.add(g.scene); return wrap;
+    }
     return g.scene;
   }));
   const src = await cache.get(key);
