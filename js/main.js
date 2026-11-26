@@ -933,6 +933,27 @@ addEventListener('resize', () => {
 });
 document.addEventListener('click', (e) => { if (e.target.closest('#card button')) { G.onCardClose && G.onCardClose(); G.onCardClose = null; } });
 
+
+// ---------------------------------------------------------------- Dad's birthday film (2026-11-26)
+// Shown once after loading, before the car picker. A tap starts it (browsers block sound without one);
+// Skip, the end of the film, or Escape go on to the picker. ?novideo or ?auto skips it.
+function playBirthdayFilm(done) {
+  const box = $('bdayFilm'), vid = $('bdayVideo');
+  if (!box || params.has('novideo') || params.has('auto')) { done(); return; }
+  let finished = false;
+  const finish = () => {
+    if (finished) return; finished = true;
+    try { vid.pause(); } catch (e) {}
+    box.style.display = 'none'; window.removeEventListener('keydown', onKey, true); done();
+  };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); finish(); } };
+  box.style.display = 'flex';
+  $('bdayPlay').onclick = () => { $('bdayStart').style.display = 'none'; vid.currentTime = 0; vid.play().catch(finish); };
+  $('bdaySkip').onclick = finish;
+  vid.onended = finish; vid.onerror = finish;
+  window.addEventListener('keydown', onKey, true);
+}
+
 // ---------------------------------------------------------------- boot
 document.addEventListener('drive', () => startDrive());
 async function boot() {
@@ -972,7 +993,7 @@ async function boot() {
     G.missions.prewarm(renderer, camera, [...G.police.prewarmList(), ...G.bikes.prewarmList()]);
     G.setWaypoint(null);
     $('loading').style.display = 'none';
-    G.openSelect();
+    playBirthdayFilm(() => G.openSelect());
     requestAnimationFrame(frame);
     G.ready = true;
     console.log(`Paradice City ready: ${world.roads.length} roads, ${world.bList.length} buildings, ${world.palmCount} palms, ${world.houseCount} houses, ${G.docks.count.lots} canal docks, ${G.docks.count.boats} docked boats`);

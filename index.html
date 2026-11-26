@@ -94,6 +94,14 @@
   #selBack { display: none; margin-top: 12px; width: 100%; padding: 10px; border: 0; border-radius: 10px; background: rgba(255,255,255,.15); color: #fff; }
   #introText { display: none; position: fixed; left: 40px; bottom: 40px; z-index: 15; font-size: 22px; text-shadow: 0 2px 10px #000; }
   #introText b { font-size: 30px; color: #9fd8ff; }
+  /* Dad's birthday film, shown once between loading and the car picker (2026-11-26) */
+  #bdayFilm { position: fixed; inset: 0; z-index: 60; background: #000; display: none; align-items: center; justify-content: center; flex-direction: column; }
+  #bdayFilm video { width: 100vw; height: 100vh; object-fit: contain; background: #000; }
+  #bdayStart { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(ellipse at 50% 45%, #242a42 55%, #1c2035); color: #fff; font-family: inherit; }
+  #bdayStart h2 { font-size: 46px; margin: 0; text-shadow: 0 3px 14px rgba(0,0,0,.35); }
+  #bdayStart p { margin: 0; opacity: .8; font-size: 18px; }
+  #bdayFilm button { font: inherit; font-size: 22px; padding: 14px 34px; border-radius: 40px; border: 0; cursor: pointer; background: #ffb347; color: #1c2035; font-weight: 700; }
+  #bdaySkip { position: absolute; right: 22px; bottom: 22px; font-size: 16px !important; padding: 10px 20px !important; background: rgba(255,255,255,.18) !important; color: #fff !important; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
@@ -101,6 +109,10 @@
 </head>
 <body>
 <div id="loading"><img src="assets/branding/logo-paradice-city.png" alt="Longboat Key: Paradice City"><div class="title-sub">Happy birthday, Dad</div><p id="loadmsg">Loading</p><p class="next">Next: choose your ride, then drive home.</p></div>
+
+<div id="bdayFilm"><video id="bdayVideo" src="assets/video/pure-imagination-for-dad.mp4" preload="auto" playsinline></video>
+  <div id="bdayStart"><h2>Happy birthday, Dad</h2><p>Pure Imagination, a sunset drive on Longboat Key</p><button id="bdayPlay">Play the video</button></div>
+  <button id="bdaySkip">Skip to the cars</button></div>
 
 <div id="select">
   <div id="selHint"><b>Choose your ride</b>, then press <b>Drive</b></div>
